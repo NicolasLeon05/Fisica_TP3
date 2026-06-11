@@ -7,9 +7,10 @@ public class Car : MonoBehaviour
     [SerializeField] private float inputForce = 150f;
     [SerializeField] private float frictionCoefficient = 0.5f;
     [SerializeField] private float restitution = 0.3f;
+    [SerializeField] private MeshRenderer meshRenderer;
 
     [Header("Rotation")]
-    [SerializeField] private float rotationSpeed = 120f;
+    [SerializeField] private float rotationSpeed = 70f;
 
     [Header("Jump")]
     [SerializeField] private float jumpImpulse = 5f;
@@ -26,6 +27,7 @@ public class Car : MonoBehaviour
 
     public float Mass => mass;
     public float Restitution => restitution;
+    public AABB Bounds => new AABB(transform.position, meshRenderer.bounds.extents * 2);
 
     public float ForwardSpeed
     {
@@ -112,5 +114,11 @@ public class Car : MonoBehaviour
     public void SetRotationInput(float value)
     {
         rotationInput = Mathf.Clamp(value, -1f, 1f);
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireCube(Bounds.center, Bounds.halfSize * 2);
     }
 }
