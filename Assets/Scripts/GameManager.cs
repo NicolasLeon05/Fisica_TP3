@@ -69,11 +69,27 @@ public class GameManager : MonoBehaviour
         UpdateOctree(parentNode);
         //DebugOctreeNodes();
         Collisions.CheckCarOctreeNodes(car1, octreeNodes);
+
+        if (CheckOctreeAABB())
+            if (Collisions.AABBvsAABB(car1.Bounds, car2.Bounds))
+                //Triangle Sphere
+                    //Triangles vertex
+                        //Triangles Ray
+                return;
     }
 
     private void OnValidate()
     {
         //UpdateOctree(parentNode);
+    }
+
+    private bool CheckOctreeAABB()
+    {
+        for (int i = 0; i < car1.occupiedNodes.Count; i++)
+            if (car2.occupiedNodes.Contains(car1.occupiedNodes[i]))
+                return true;
+
+        return false;
     }
 
     private void UpdateOctree(OctreeNode node)
