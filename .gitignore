@@ -73,3 +73,7 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+Assets/ModernCartoonCar488/TEXTURES/488_DETAILS.psd
+Assets/ModernCartoonCar488/TEXTURES/488_DETAILS_EMISSION.psd
+Assets/ModernCartoonCar488/TEXTURES/488_WHEEL.psd
+Assets/ModernCartoonCar488/TEXTURES/488_WHEEL_SPECULAR.psd
