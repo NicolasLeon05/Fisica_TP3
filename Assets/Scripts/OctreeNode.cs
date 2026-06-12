@@ -12,7 +12,11 @@ public class OctreeNode : MonoBehaviour
     public List<OctreeNode> Children => children;
     public float Size => size;
     public AABB Bounds => new AABB(transform.position, new Vector3(size, size, size));
-    public OctreeNode Parent => parent;
+    public OctreeNode Parent
+    {
+        get => parent;
+        set => parent = value;
+    }
 
     private static readonly Vector3[] Directions = new Vector3[]
     {
@@ -49,13 +53,13 @@ public class OctreeNode : MonoBehaviour
 
         for (int i = 0; i < CHILDREN_AMOUNT; i++)
         {
-            GameObject childGO = new GameObject($"OctreeNode_Child_{i}");
+            GameObject childGO = new GameObject($"{gameObject.name}_Child_{i}");
             childGO.transform.SetParent(transform);
 
             OctreeNode childNode = childGO.AddComponent<OctreeNode>();
             Vector3 childPosition = transform.position + (Directions[i] * delta);
             childNode.Initialize(childPosition, newSize);
-            childNode.SetParent(this);
+            childNode.Parent = this;
             children.Add(childNode);
         }
     }
@@ -69,14 +73,14 @@ public class OctreeNode : MonoBehaviour
         foreach (OctreeNode child in children)
         {
             child.DestroyChildren();
+#if UNITY_EDITOR
             DestroyImmediate(child.gameObject);
+#else
+            child.Destroy(child.gameObject);
+#endif
         }
 
         children.Clear();
     }
 
-    public void SetParent(OctreeNode parent)
-    {
-        this.parent = parent;
-    }
 }

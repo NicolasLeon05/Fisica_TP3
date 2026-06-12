@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Car : MonoBehaviour
@@ -25,6 +26,7 @@ public class Car : MonoBehaviour
 
     private bool isGrounded = true;
 
+
     public float Mass => mass;
     public float Restitution => restitution;
     public AABB Bounds => new AABB(transform.position, meshRenderer.bounds.extents * 2);
@@ -41,6 +43,7 @@ public class Car : MonoBehaviour
         set => verticalSpeed = value;
     }
 
+    public List<OctreeNode> occupiedNodes;
     private void FixedUpdate()
     {
         float dt = Time.fixedDeltaTime;
@@ -89,6 +92,9 @@ public class Car : MonoBehaviour
 
         float steeringFactor = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
         transform.Rotate(Vector3.up, rotationInput * rotationSpeed * steeringFactor * dt);
+
+        foreach (OctreeNode node in occupiedNodes)
+            Debug.Log(node.gameObject.name);    
     }
 
     public void Jump()

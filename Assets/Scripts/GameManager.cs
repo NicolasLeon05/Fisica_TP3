@@ -12,46 +12,63 @@ public class GameManager : MonoBehaviour
     private void Update()
     {
         //CAR 1
+        //ACCELERATION
         float move1 = 0f;
+
         if (Input.GetKey(KeyCode.W))
             move1 = 1f;
         else if (Input.GetKey(KeyCode.S))
             move1 = -1f;
+
         car1.SetMovementInput(move1);
 
+        //ROTATION
         float rotate1 = 0f;
+
         if (Input.GetKey(KeyCode.A))
             rotate1 = -1f;
         else if (Input.GetKey(KeyCode.D))
             rotate1 = 1f;
+
         car1.SetRotationInput(rotate1);
 
+        //JUMP
         if (Input.GetKeyDown(KeyCode.Space))
             car1.Jump();
 
         //CAR 2
+        //ACCELERATION
         float move2 = 0f;
+
         if (Input.GetKey(KeyCode.UpArrow))
             move2 = 1f;
         else if (Input.GetKey(KeyCode.DownArrow))
             move2 = -1f;
+
         car2.SetMovementInput(move2);
 
+        //ROTATION
         float rotate2 = 0f;
+
         if (Input.GetKey(KeyCode.LeftArrow))
             rotate2 = -1f;
         else if (Input.GetKey(KeyCode.RightArrow))
             rotate2 = 1f;
+
         car2.SetRotationInput(rotate2);
 
+
+        //JUMP
         if (Input.GetKeyDown(KeyCode.RightControl))
             car2.Jump();
     }
 
     private void FixedUpdate()
     {
-        DebugOctreeNodes();
+        octreeNodes.Clear();
         UpdateOctree(parentNode);
+        //DebugOctreeNodes();
+        Collisions.CheckCarOctreeNodes(car1, octreeNodes);
     }
 
     private void OnValidate()
@@ -61,13 +78,6 @@ public class GameManager : MonoBehaviour
 
     private void UpdateOctree(OctreeNode node)
     {
-        if (node == null)
-        {
-            Debug.LogWarning("Node is null");
-            if (octreeNodes.Contains(node))
-                octreeNodes.Remove(node);
-        }
-
         if (!octreeNodes.Contains(node))
             octreeNodes.Add(node);
 

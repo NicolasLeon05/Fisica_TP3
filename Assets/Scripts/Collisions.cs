@@ -1,3 +1,6 @@
+using NUnit.Framework;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public static class Collisions
@@ -12,5 +15,16 @@ public static class Collisions
             return false;
 
         return true;
+    }
+
+    internal static void CheckCarOctreeNodes(Car car, List<OctreeNode> octreeNodes)
+    {
+        car.occupiedNodes.Clear();
+
+        foreach (OctreeNode node in octreeNodes)
+        {
+            if (AABBvsAABB(car.Bounds, node.Bounds))
+                car.occupiedNodes.Add(node);
+        }
     }
 }
