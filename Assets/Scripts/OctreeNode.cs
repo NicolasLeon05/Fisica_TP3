@@ -63,11 +63,10 @@ public class OctreeNode : MonoBehaviour
     [ContextMenu("Destroy Children")]
     private void DestroyChildren()
     {
-        Debug.Log("Destroy called, children amount: " + children.Count);
         if (children.Count == 0)
             return;
 
-        foreach (var child in children)
+        foreach (OctreeNode child in children)
         {
             child.DestroyChildren();
             DestroyImmediate(child.gameObject);
