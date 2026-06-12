@@ -129,15 +129,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 65dd5e2569b252046b65dfcd5f89862c, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -1.3723739
+      value: -12.49
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 65dd5e2569b252046b65dfcd5f89862c, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.0036936796
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 65dd5e2569b252046b65dfcd5f89862c, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 1.9432924
+      value: 5.5
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 65dd5e2569b252046b65dfcd5f89862c, type: 3}
       propertyPath: m_LocalRotation.w
@@ -459,6 +459,11 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!23 &644617584 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: -6652725513331149018, guid: 9ec6a8fc6925acb4abc5500eeecb8270, type: 3}
+  m_PrefabInstance: {fileID: 804384192}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &804384192
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -469,15 +474,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 9ec6a8fc6925acb4abc5500eeecb8270, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 1.6718981
+      value: 11.99
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 9ec6a8fc6925acb4abc5500eeecb8270, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.0011515189
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 9ec6a8fc6925acb4abc5500eeecb8270, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 1.3466971
+      value: 5.92
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 9ec6a8fc6925acb4abc5500eeecb8270, type: 3}
       propertyPath: m_LocalRotation.w
@@ -592,6 +597,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!23 &1129308234 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: -5006724994692389720, guid: 65dd5e2569b252046b65dfcd5f89862c, type: 3}
+  m_PrefabInstance: {fileID: 170851881}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1375216951
 GameObject:
   m_ObjectHideFlags: 0
@@ -623,6 +633,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   car1: {fileID: 2070076505}
   car2: {fileID: 1926321837}
+  parentNode: {fileID: 2023484054}
 --- !u!4 &1375216953
 Transform:
   m_ObjectHideFlags: 0
@@ -656,11 +667,58 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Car
   mass: 10
-  movementForce: 150
+  inputForce: 150
   frictionCoefficient: 0.5
   restitution: 0.3
+  meshRenderer: {fileID: 1129308234}
   rotationSpeed: 70
   jumpImpulse: 5
+  occupiedNodes: []
+--- !u!1 &2023484053
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2023484055}
+  - component: {fileID: 2023484054}
+  m_Layer: 0
+  m_Name: OctreeParent
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2023484054
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2023484053}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4af4438b7e299b4b8114160e688421f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OctreeNode
+  size: 30
+--- !u!4 &2023484055
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2023484053}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 12.47885, y: -0, z: -8.6794}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2070076504 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 9ec6a8fc6925acb4abc5500eeecb8270, type: 3}
@@ -679,11 +737,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Car
   mass: 10
-  movementForce: 150
+  inputForce: 150
   frictionCoefficient: 0.5
   restitution: 0.3
+  meshRenderer: {fileID: 644617584}
   rotationSpeed: 70
   jumpImpulse: 5
+  occupiedNodes: []
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -694,3 +754,4 @@ SceneRoots:
   - {fileID: 804384192}
   - {fileID: 170851881}
   - {fileID: 1375216953}
+  - {fileID: 2023484055}

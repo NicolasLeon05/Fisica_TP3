@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Car : MonoBehaviour
@@ -7,9 +8,10 @@ public class Car : MonoBehaviour
     [SerializeField] private float inputForce = 150f;
     [SerializeField] private float frictionCoefficient = 0.5f;
     [SerializeField] private float restitution = 0.3f;
+    [SerializeField] private MeshRenderer meshRenderer;
 
     [Header("Rotation")]
-    [SerializeField] private float rotationSpeed = 120f;
+    [SerializeField] private float rotationSpeed = 70f;
 
     [Header("Jump")]
     [SerializeField] private float jumpImpulse = 5f;
@@ -24,8 +26,10 @@ public class Car : MonoBehaviour
 
     private bool isGrounded = true;
 
+
     public float Mass => mass;
     public float Restitution => restitution;
+    public AABB Bounds => new AABB(transform.position, meshRenderer.bounds.extents * 2);
 
     public float ForwardSpeed
     {
@@ -39,6 +43,7 @@ public class Car : MonoBehaviour
         set => verticalSpeed = value;
     }
 
+    public List<OctreeNode> occupiedNodes;
     private void FixedUpdate()
     {
         float dt = Time.fixedDeltaTime;
@@ -87,6 +92,9 @@ public class Car : MonoBehaviour
 
         float steeringFactor = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
         transform.Rotate(Vector3.up, rotationInput * rotationSpeed * steeringFactor * dt);
+
+        foreach (OctreeNode node in occupiedNodes)
+            Debug.Log(node.gameObject.name);    
     }
 
     public void Jump()
@@ -112,5 +120,11 @@ public class Car : MonoBehaviour
     public void SetRotationInput(float value)
     {
         rotationInput = Mathf.Clamp(value, -1f, 1f);
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireCube(Bounds.center, Bounds.halfSize * 2);
     }
 }
