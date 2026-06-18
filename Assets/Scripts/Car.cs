@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using Unity.Burst.Intrinsics;
 using UnityEngine;
 
 public class Car : MonoBehaviour
@@ -9,6 +11,7 @@ public class Car : MonoBehaviour
     [SerializeField] private float frictionCoefficient = 0.5f;
     [SerializeField] private float restitution = 0.3f;
     [SerializeField] private MeshRenderer meshRenderer;
+    [SerializeField] private MeshFilter meshFilter;
 
     [Header("Rotation")]
     [SerializeField] private float rotationSpeed = 70f;
@@ -26,10 +29,13 @@ public class Car : MonoBehaviour
 
     private bool isGrounded = true;
 
+    private List<Triangle> triangles;
+
 
     public float Mass => mass;
     public float Restitution => restitution;
     public AABB Bounds => new AABB(transform.position, meshRenderer.bounds.extents * 2);
+    public List<Triangle> Triangles => triangles;
 
     public float ForwardSpeed
     {
@@ -44,6 +50,13 @@ public class Car : MonoBehaviour
     }
 
     public List<OctreeNode> occupiedNodes;
+
+    private void Awake()
+    {
+        SaveTriangles();
+    }
+
+
     private void FixedUpdate()
     {
         float dt = Time.fixedDeltaTime;
@@ -94,7 +107,7 @@ public class Car : MonoBehaviour
         transform.Rotate(Vector3.up, rotationInput * rotationSpeed * steeringFactor * dt);
 
         foreach (OctreeNode node in occupiedNodes)
-            Debug.Log(node.gameObject.name);    
+            Debug.Log(node.gameObject.name);
     }
 
     public void Jump()
@@ -120,6 +133,25 @@ public class Car : MonoBehaviour
     public void SetRotationInput(float value)
     {
         rotationInput = Mathf.Clamp(value, -1f, 1f);
+    }
+
+    private void SaveTriangles()
+    {
+        Mesh mesh = meshFilter.mesh;
+
+        Vector3[] vertices = mesh.vertices;
+        int[] trianglesArray = mesh.triangles;
+
+        triangles.Clear();
+
+        for (int i = 0; i < trianglesArray.Length; i += 3)
+        {
+            Vector3 v1 = vertices[trianglesArray[i]];
+            Vector3 v2 = vertices[trianglesArray[i + 1]];
+            Vector3 v3 = vertices[trianglesArray[i + 2]];
+
+            triangles.Add(new Triangle(v1, v2, v3));
+        }
     }
 
     private void OnDrawGizmos()
