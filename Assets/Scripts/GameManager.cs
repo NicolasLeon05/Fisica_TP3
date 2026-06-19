@@ -8,6 +8,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private OctreeNode parentNode;
 
     private List<OctreeNode> octreeNodes = new List<OctreeNode>();
+    private List<OctreeNode> sharedNodes = new List<OctreeNode>();
 
     private void Update()
     {
@@ -69,13 +70,30 @@ public class GameManager : MonoBehaviour
         UpdateOctree(parentNode);
         //DebugOctreeNodes();
         Collisions.CheckCarOctreeNodes(car1, octreeNodes);
+        Collisions.CheckCarOctreeNodes(car2, octreeNodes);
 
-        if (CheckOctreeAABB())
-            if (Collisions.AABBvsAABB(car1.Bounds, car2.Bounds))
-                //Triangle Sphere
-                    //Triangles vertex
-                        //Triangles Ray
-                return;
+        if (!CheckOctreeAABB())
+            return;
+
+        if (!Collisions.AABBvsAABB(car1.Bounds, car2.Bounds))
+            return;
+        else
+            Debug.Log("CAR AABBB COLLISION");
+
+        ClearNodeTriangles();
+
+        CheckTriangleOctree(car1);
+        CheckTriangleOctree(car2);
+
+        CheckTriangleSphere();
+
+        //if (CheckOctreeAABB())
+        //    if (Collisions.AABBvsAABB(car1.Bounds, car2.Bounds))
+        //        //Triangle Octree
+        //        //Triangle Sphere
+        //        //Triangles vertex
+        //        //Triangles Ray
+        //        return;
     }
 
     private void OnValidate()
@@ -85,11 +103,65 @@ public class GameManager : MonoBehaviour
 
     private bool CheckOctreeAABB()
     {
-        for (int i = 0; i < car1.occupiedNodes.Count; i++)
-            if (car2.occupiedNodes.Contains(car1.occupiedNodes[i]))
-                return true;
+        bool collision = false;
+        sharedNodes.Clear();
 
-        return false;
+        foreach (OctreeNode node in car1.occupiedNodes)
+        {
+            if (car2.occupiedNodes.Contains(node))
+            {
+                collision = true;
+                sharedNodes.Add(node);
+            }
+        }
+
+        return collision;
+    }
+
+    private void ClearNodeTriangles()
+    {
+        foreach (OctreeNode node in octreeNodes)
+            node.triangles.Clear();
+    }
+
+    private void CheckTriangleOctree(Car car)
+    {
+        foreach (Triangle triangle in car.Triangles)
+        {
+            Sphere sphere = car.GetTriangleSphere(triangle);
+
+            foreach (OctreeNode node in sharedNodes)
+            {
+                //Debug.Log($"{node.name} contains {node.triangles.Count} triangles");
+                if (Collisions.SphereVsAABB(sphere, node.Bounds))
+                    node.triangles.Add(new TriangleReference(car, triangle));
+            }
+        }
+    }
+
+    private void CheckTriangleSphere()
+    {
+        foreach (OctreeNode node in sharedNodes)
+        {
+            for (int i = 0; i < node.triangles.Count; i++)
+            {
+                TriangleReference a = node.triangles[i];
+                for (int j = i + 1; j < node.triangles.Count; j++)
+                {
+                    TriangleReference b = node.triangles[j];
+
+                    if (a.owner == b.owner)
+                        continue;
+
+                    Sphere sphereA = a.owner.GetTriangleSphere(a.triangle);
+                    Sphere sphereB = b.owner.GetTriangleSphere(b.triangle);
+                    if (!Collisions.SphereVsSphere(sphereA, sphereB))
+                        continue;
+
+                    //Debug.Log("Sphere collision");
+                }
+            }
+        }
     }
 
     private void UpdateOctree(OctreeNode node)

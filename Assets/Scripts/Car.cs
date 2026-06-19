@@ -29,7 +29,7 @@ public class Car : MonoBehaviour
 
     private bool isGrounded = true;
 
-    private List<Triangle> triangles;
+    private List<Triangle> triangles = new List<Triangle>();
 
 
     public float Mass => mass;
@@ -154,9 +154,32 @@ public class Car : MonoBehaviour
         }
     }
 
+    public Sphere GetTriangleSphere(Triangle triangle)
+    {
+        Vector3 worldCenter = transform.TransformPoint(triangle.localBoundingSphere.center);
+
+        float scale =
+            Mathf.Max(
+                transform.lossyScale.x,
+                Mathf.Max(transform.lossyScale.y, transform.lossyScale.z));
+
+        return new Sphere(worldCenter, triangle.localBoundingSphere.radius * scale);
+    }
+
+
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireCube(Bounds.center, Bounds.halfSize * 2);
+
+        if (triangles == null)
+            return;
+
+        //foreach (Triangle triangle in triangles)
+        //{
+        //    Sphere sphere = GetTriangleSphere(triangle);
+        //    Gizmos.color = Color.cyan;
+        //    Gizmos.DrawWireSphere(sphere.center, sphere.radius);
+        //}
     }
 }

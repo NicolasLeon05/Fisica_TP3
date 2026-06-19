@@ -1,5 +1,3 @@
-using NUnit.Framework;
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -17,7 +15,27 @@ public static class Collisions
         return true;
     }
 
-    internal static void CheckCarOctreeNodes(Car car, List<OctreeNode> octreeNodes)
+    public static bool SphereVsAABB(Sphere sphere, AABB bounds)
+    {
+        float x = Mathf.Clamp(sphere.center.x, bounds.Min.x, bounds.Max.x);
+        float y = Mathf.Clamp(sphere.center.y, bounds.Min.y, bounds.Max.y);
+        float z = Mathf.Clamp(sphere.center.z, bounds.Min.z, bounds.Max.z);
+
+        Vector3 closestPoint = new Vector3(x, y, z);
+
+        Vector3 difference = sphere.center - closestPoint;
+
+        return difference.sqrMagnitude <= sphere.radius * sphere.radius;
+    }
+
+    public static bool SphereVsSphere(Sphere a, Sphere b)
+    {
+        float radiusSum = a.radius + b.radius;
+
+        return (a.center - b.center).sqrMagnitude <= radiusSum * radiusSum;
+    }
+
+    public static void CheckCarOctreeNodes(Car car, List<OctreeNode> octreeNodes)
     {
         car.occupiedNodes.Clear();
 

@@ -4,10 +4,11 @@ using UnityEngine;
 public class OctreeNode : MonoBehaviour
 {
     [SerializeField] private float size;
-    private List<OctreeNode> children = new List<OctreeNode>();
+    [SerializeField] private List<OctreeNode> children = new List<OctreeNode>();
     private const int CHILDREN_AMOUNT = 8;
     private OctreeNode parent = null;
 
+    public List<TriangleReference> triangles = new();
 
     public List<OctreeNode> Children => children;
     public float Size => size;
