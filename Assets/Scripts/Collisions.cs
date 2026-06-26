@@ -35,14 +35,28 @@ public static class Collisions
         return (a.center - b.center).sqrMagnitude <= radiusSum * radiusSum;
     }
 
-    public static void CheckCarOctreeNodes(Car car, List<OctreeNode> octreeNodes)
+    public static void CheckCarOctreeNodes(List<Car> cars, OctreeNode node)
     {
-        car.occupiedNodes.Clear();
-
-        foreach (OctreeNode node in octreeNodes)
+        foreach (Car car in cars)
         {
             if (AABBvsAABB(car.Bounds, node.Bounds))
-                car.occupiedNodes.Add(node);
+                if (!node.cars.Contains(car))
+                    node.cars.Add(car);
+        }
+    }
+
+    public static void CheckTriangleOctree(OctreeNode node)
+    {
+        foreach (Car car in node.cars)
+        {
+            foreach (Triangle triangle in car.Triangles)
+            {
+                Sphere sphere = car.GetTriangleSphere(triangle);
+
+                //Debug.Log($"{node.name} contains {node.triangles.Count} triangles");
+                if (SphereVsAABB(sphere, node.Bounds))
+                    node.triangles.Add(new TriangleReference(car, triangle));
+            }
         }
     }
 }

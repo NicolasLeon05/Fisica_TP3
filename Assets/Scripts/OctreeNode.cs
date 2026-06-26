@@ -5,19 +5,24 @@ public class OctreeNode : MonoBehaviour
 {
     [SerializeField] private float size;
     [SerializeField] private List<OctreeNode> children = new List<OctreeNode>();
-    private const int CHILDREN_AMOUNT = 8;
+
+    private const int DIVIDE_AMOUNT = 8;
     private OctreeNode parent = null;
 
+    public bool HasChildren => children.Count > 0;
+
     public List<TriangleReference> triangles = new();
+    public List<Car> cars = new();
 
     public List<OctreeNode> Children => children;
     public float Size => size;
-    public AABB Bounds => new AABB(transform.position, new Vector3(size, size, size));
+    public AABB Bounds => new AABB(_position, new Vector3(size, size, size));
     public OctreeNode Parent
     {
         get => parent;
         set => parent = value;
     }
+    private Vector3 _position;
 
     private static readonly Vector3[] Directions = new Vector3[]
     {
@@ -31,20 +36,24 @@ public class OctreeNode : MonoBehaviour
         new Vector3(1, 1, 1)
     };
 
-    public void Initialize(Vector3 position, float size)
+    OctreeNode(Vector3 position, float size, OctreeNode parent)
     {
-        transform.position = position;
+        _position = position;
         this.size = size;
+        Parent = parent;
+        triangles = new();
+        cars = new();
     }
+
 
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.green;
-        Gizmos.DrawWireCube(transform.position, new Vector3(size, size, size));
+        Gizmos.DrawWireCube(_position, new Vector3(size, size, size));
     }
 
     [ContextMenu("Generate Children")]
-    private void GenerateChildren()
+    public void GenerateChildren()
     {
         if (children.Count > 0)
             return;
@@ -52,16 +61,10 @@ public class OctreeNode : MonoBehaviour
         float newSize = size / 2f;
         float delta = size / 4f;
 
-        for (int i = 0; i < CHILDREN_AMOUNT; i++)
+        for (int i = 0; i < DIVIDE_AMOUNT; i++)
         {
-            GameObject childGO = new GameObject($"{gameObject.name}_Child_{i}");
-            childGO.transform.SetParent(transform);
-
-            OctreeNode childNode = childGO.AddComponent<OctreeNode>();
-            Vector3 childPosition = transform.position + (Directions[i] * delta);
-            childNode.Initialize(childPosition, newSize);
-            childNode.Parent = this;
-            children.Add(childNode);
+            Vector3 childPosition = _position + (Directions[i] * delta);
+            children.Add(new OctreeNode(childPosition, newSize, this));
         }
     }
 
@@ -84,4 +87,9 @@ public class OctreeNode : MonoBehaviour
         children.Clear();
     }
 
+
+    public void SetPosition(Vector3 position)
+    {
+        _position = position;
+    }
 }

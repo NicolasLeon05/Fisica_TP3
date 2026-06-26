@@ -49,7 +49,6 @@ public class Car : MonoBehaviour
         set => verticalSpeed = value;
     }
 
-    public List<OctreeNode> occupiedNodes;
 
     private void Awake()
     {
@@ -105,9 +104,6 @@ public class Car : MonoBehaviour
 
         float steeringFactor = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
         transform.Rotate(Vector3.up, rotationInput * rotationSpeed * steeringFactor * dt);
-
-        foreach (OctreeNode node in occupiedNodes)
-            Debug.Log(node.gameObject.name);
     }
 
     public void Jump()
