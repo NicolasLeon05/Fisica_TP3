@@ -865,7 +865,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   car1: {fileID: 65176528}
   car2: {fileID: 845769768}
-  parentNode: {fileID: 2023484054}
   minObjectsToDivide: 2
   minTrianglesToDivide: 64
 --- !u!4 &1375216953
@@ -938,8 +937,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OctreeNode
   size: 30
-  children: []
+  children:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  parent: {fileID: 0}
   cars: []
+  _position: {x: 0, y: 0, z: 0}
 --- !u!4 &2023484055
 Transform:
   m_ObjectHideFlags: 0
