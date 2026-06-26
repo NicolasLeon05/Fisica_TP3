@@ -21,7 +21,7 @@ public class GameManager : MonoBehaviour
     {
         cars.Add(car1);
         cars.Add(car2);
-        parentNode.SetPosition(parentNode.transform.position);
+        parentNode.SetPosition(transform.position);
     }
 
     private void Update()
@@ -196,18 +196,18 @@ public class GameManager : MonoBehaviour
                 //Rayo desde el punto opuesto a los otros y verificar que cortan el otro triangulo
             }
         }
-         return;
+        return;
     }
 
     [ContextMenu("Debug Octree Nodes")]
     private void DebugOctreeNodes()
     {
-        foreach (OctreeNode node in octreeNodes)
-        {
-            if (node == null)
-                Debug.LogWarning("Node is null 2");
-            else
-                Debug.Log(node.gameObject.name);
-        }
+        //foreach (OctreeNode node in octreeNodes)
+        //{
+        //    if (node == null)
+        //        Debug.LogWarning("Node is null 2");
+        //    else
+        //        Debug.Log(node.gameObject.name);
+        //}
     }
 }

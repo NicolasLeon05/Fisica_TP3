@@ -1,7 +1,8 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class OctreeNode : MonoBehaviour
+public class OctreeNode
 {
     [SerializeField] private float size;
     [SerializeField] private List<OctreeNode> children = new List<OctreeNode>();
@@ -64,29 +65,18 @@ public class OctreeNode : MonoBehaviour
         for (int i = 0; i < DIVIDE_AMOUNT; i++)
         {
             Vector3 childPosition = _position + (Directions[i] * delta);
-            children.Add(new OctreeNode(childPosition, newSize, this));
+            children.Add(GenerateChild(childPosition, newSize, this));
         }
     }
 
-    [ContextMenu("Destroy Children")]
-    private void DestroyChildren()
+    private OctreeNode GenerateChild(Vector3 childPosition, float newSize, OctreeNode parent)
     {
-        if (children.Count == 0)
-            return;
-
-        foreach (OctreeNode child in children)
-        {
-            child.DestroyChildren();
-#if UNITY_EDITOR
-            DestroyImmediate(child.gameObject);
-#else
-            child.Destroy(child.gameObject);
-#endif
-        }
-
-        children.Clear();
+        OctreeNode newChild = new(childPosition, newSize, parent);
+        newChild.Parent = parent;
+        newChild._position = childPosition;
+        newChild.size = newSize;
+        return newChild;
     }
-
 
     public void SetPosition(Vector3 position)
     {
