@@ -70,11 +70,16 @@ public class Car : BaseCollisionObject
 
     private void FixedUpdate()
     {
-        float dt = Time.fixedDeltaTime;
+        SimulateMovement();
+        //UpdateTriangleCache();
+    }
 
+    private void SimulateMovement()
+    {
+        float dt = Time.fixedDeltaTime;
         float appliedForce = movementInput * inputForce;
-        float frictionForce = 0f;
         float normalForce = mass * GRAVITY;
+        float frictionForce = 0f;
 
         if (Mathf.Abs(forwardSpeed) > 0.001f)
         {
@@ -82,40 +87,27 @@ public class Car : BaseCollisionObject
         }
         else if (movementInput != 0)
         {
-            float maxStaticFriction = frictionCoefficient * normalForce;
+            float maxStatic = frictionCoefficient * normalForce;
 
-            if (Mathf.Abs(appliedForce) < maxStaticFriction)
+            if (Mathf.Abs(appliedForce) < maxStatic)
             {
-                forwardSpeed = 0f;
+                forwardSpeed = 0;
                 return;
             }
 
-            frictionForce = -Mathf.Sign(appliedForce) * maxStaticFriction;
+            frictionForce = -Mathf.Sign(appliedForce) * maxStatic;
         }
 
-        float totalForce = appliedForce + frictionForce;
-        float acceleration = totalForce / mass;
-
-
+        float acceleration = (appliedForce + frictionForce) / mass;
         forwardSpeed += acceleration * dt;
 
         if (movementInput == 0 && Mathf.Abs(forwardSpeed) < 0.01f)
-            forwardSpeed = 0f;
+            forwardSpeed = 0;
 
-        /*
-        if (!isGrounded)
-        {
-            verticalSpeed -= GRAVITY * dt;
-        }
-        */
+        transform.position += transform.forward * forwardSpeed * dt + Vector3.up * verticalSpeed * dt;
 
-        Vector3 horizontalMovement = transform.forward * forwardSpeed * dt;
-        Vector3 verticalMovement = Vector3.up * verticalSpeed * dt;
-        transform.position += horizontalMovement + verticalMovement;
-
-
-        float steeringFactor = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
-        transform.Rotate(Vector3.up, rotationInput * rotationSpeed * steeringFactor * dt);
+        float steering = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
+        transform.Rotate(Vector3.up, rotationInput * rotationSpeed * steering * dt);
     }
 
     public void Jump()
@@ -172,8 +164,14 @@ public class Car : BaseCollisionObject
                 Mathf.Max(transform.lossyScale.y, transform.lossyScale.z));
 
         return new Sphere(worldCenter, triangle.localBoundingSphere.radius * scale);
+        //return triangle.worldBoundingSphere;
     }
 
+    public void UpdateTriangleCache()
+    {
+        for (int i = 0; i < triangles.Count; i++)
+            triangles[i].UpdateWorldData(transform);
+    }
 
     private void OnDrawGizmos()
     {

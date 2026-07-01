@@ -101,28 +101,26 @@ public class GameManager : MonoBehaviour
 
     private List<TriangleReference> CheckTriangleSphere(OctreeNode node)
     {
-        for (int i = 0; i < node.triangles.Count; i++)
+        List<BaseCollisionObject> owners = new(node.triangles.Keys);
+
+        for (int i = 0; i < owners.Count; i++)
         {
-            TriangleReference a = node.triangles[i];
-            for (int j = i + 1; j < node.triangles.Count; j++)
+            for (int j = i + 1; j < owners.Count; j++)
             {
-                TriangleReference b = node.triangles[j];
+                List<TriangleReference> listA = node.triangles[owners[i]];
 
-                if (a.owner == b.owner)
-                    continue;
+                List<TriangleReference> listB = node.triangles[owners[j]];
 
-                Sphere sphereA = a.sphere;
-                Sphere sphereB = b.sphere;
-                if (!Collisions.SphereVsSphere(sphereA, sphereB))
-                    continue;
+                foreach (var a in listA)
+                {
+                    foreach (var b in listB)
+                    {
+                        if (!Collisions.SphereVsSphere(a.sphere, b.sphere))
+                            continue;
 
-                List<TriangleReference> collidingTriangles = new();
-                collidingTriangles.Add(a);
-                collidingTriangles.Add(b);
-
-                return collidingTriangles;
-                //Guardar triangulos que colisionaron
-                //Debug.Log("Sphere collision");
+                        return new List<TriangleReference>() { a, b };
+                    }
+                }
             }
         }
 
@@ -152,10 +150,10 @@ public class GameManager : MonoBehaviour
             return;
 
         // 3) Insertar únicamente los triángulos de esos autos dentro del nodo
-        Collisions.CheckTriangleOctree(node);
+        Collisions.SaveTriangleOctree(node);
 
         // 4) Si todavía hay demasiados triángulos, subdividir
-        if (node.triangles.Count >= minTrianglesToDivide &&
+        if (node.GetTriangleCount() >= minTrianglesToDivide &&
             node.Size / 2f >= minSize)
         {
             node.GenerateChildren();

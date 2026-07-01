@@ -12,7 +12,7 @@ public class OctreeNode
 
     public bool HasChildren => children.Count > 0;
 
-    public List<TriangleReference> triangles = new();
+    public Dictionary<BaseCollisionObject, List<TriangleReference>> triangles = new();
     public List<BaseCollisionObject> objects = new();
 
     public List<OctreeNode> Children => children;
@@ -79,6 +79,46 @@ public class OctreeNode
         newChild._position = childPosition;
         newChild.size = newSize;
         return newChild;
+    }
+
+    //public void InsertTriangle(TriangleReference triangle)
+    //{
+    //    // Si la esfera del triángulo no toca este nodo, no pertenece.
+    //    if (!Collisions.SphereVsAABB(triangle.sphere, Bounds))
+    //        return;
+    //
+    //    // Si soy hoja, lo guardo acá.
+    //    if (!HasChildren)
+    //    {
+    //        triangles.Add(triangle);
+    //        return;
+    //    }
+    //
+    //    bool inserted = false;
+    //
+    //    foreach (OctreeNode child in children)
+    //    {
+    //        if (!Collisions.SphereVsAABB(triangle.sphere, child.Bounds))
+    //            continue;
+    //
+    //        child.InsertTriangle(triangle);
+    //        inserted = true;
+    //    }
+    //
+    //    // Si por algún motivo no entró en ningún hijo,
+    //    // queda almacenado en este nodo.
+    //    if (!inserted)
+    //        triangles.Add(triangle);
+    //}
+
+    public int GetTriangleCount()
+    {
+        int total = 0;
+
+        foreach (var pair in triangles)
+            total += pair.Value.Count;
+
+        return total;
     }
 
     public void Clear()

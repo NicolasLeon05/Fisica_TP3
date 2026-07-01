@@ -866,7 +866,7 @@ MonoBehaviour:
   car1: {fileID: 65176528}
   car2: {fileID: 845769768}
   parentSize: 30
-  minSize: 0.1
+  minSize: 0.46874
   minObjectsToDivide: 2
   minTrianglesToDivide: 64
 --- !u!4 &1375216953

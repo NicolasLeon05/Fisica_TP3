@@ -54,8 +54,10 @@ public static class Collisions
         }
     }
 
-    public static void CheckTriangleOctree(OctreeNode node)
+    public static bool CheckMinTrianglesContained(OctreeNode node, int minTriangles)
     {
+        int trianglesContained = 0;
+
         foreach (BaseCollisionObject obj in node.objects)
         {
             if (obj.Triangles == null)
@@ -63,11 +65,61 @@ public static class Collisions
 
             foreach (Triangle triangle in obj.Triangles)
             {
+                if (trianglesContained >= minTriangles)
+                    return true;
+
                 Sphere sphere = obj.GetTriangleSphere(triangle);
 
                 if (SphereVsAABB(sphere, node.Bounds))
-                    node.triangles.Add(new TriangleReference(obj, triangle, sphere));
+                    trianglesContained++;
             }
+        }
+
+        return false;
+    }
+
+    public static void SaveTriangleOctree(OctreeNode node)
+    {
+        if (node.Parent == null)
+        {
+            foreach (BaseCollisionObject obj in node.objects)
+            {
+                if (obj.Triangles == null)
+                    continue;
+
+                List<TriangleReference> list = new();
+
+                foreach (Triangle triangle in obj.Triangles)
+                {
+                    Sphere sphere = obj.GetTriangleSphere(triangle);
+
+                    if (!SphereVsAABB(sphere, node.Bounds))
+                        continue;
+
+                    list.Add(new TriangleReference(obj, triangle, sphere));
+                }
+
+                if (list.Count > 0)
+                    node.triangles.Add(obj, list);
+            }
+
+            return;
+        }
+
+        foreach (var pair in node.Parent.triangles)
+        {
+            List<TriangleReference> list = new();
+
+            foreach (TriangleReference triangle in pair.Value)
+            {
+                if (!SphereVsAABB(triangle.sphere, node.Bounds))
+                    continue;
+
+                list.Add(triangle);
+            }
+
+            if (list.Count > 0)
+                node.triangles.Add(pair.Key, list);
         }
     }
 
