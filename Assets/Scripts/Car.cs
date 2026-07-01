@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Burst.Intrinsics;
 using UnityEngine;
 
-public class Car : MonoBehaviour
+public class Car : BaseCollisionObject
 {
     [Header("Physics")]
     [SerializeField] private float mass = 10f;
@@ -35,7 +35,6 @@ public class Car : MonoBehaviour
     public float Mass => mass;
     public float Restitution => restitution;
     public AABB Bounds => new AABB(transform.position, meshRenderer.bounds.extents * 2);
-    public List<Triangle> Triangles => triangles;
 
     public float ForwardSpeed
     {
@@ -49,6 +48,19 @@ public class Car : MonoBehaviour
         set => verticalSpeed = value;
     }
 
+    private AABBVolume collisionVolume;
+
+    public override CollisionVolume CollisionVolume
+    {
+        get
+        {
+            collisionVolume ??= new AABBVolume(Bounds);
+            collisionVolume.Bounds = Bounds;
+            return collisionVolume;
+        }
+    }
+
+    public override List<Triangle> Triangles => triangles;
 
     private void Awake()
     {
@@ -150,7 +162,7 @@ public class Car : MonoBehaviour
         }
     }
 
-    public Sphere GetTriangleSphere(Triangle triangle)
+    public override Sphere GetTriangleSphere(Triangle triangle)
     {
         Vector3 worldCenter = transform.TransformPoint(triangle.localBoundingSphere.center);
 

@@ -818,7 +818,7 @@ Transform:
   m_GameObject: {fileID: 845769767}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 13.7, y: 13.96, z: 13.6}
+  m_LocalPosition: {x: 14.08, y: 13.96, z: 14.23}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -865,8 +865,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   car1: {fileID: 65176528}
   car2: {fileID: 845769768}
-  parentSize: 30
-  minSize: 0.46874
+  size: 30
   minObjectsToDivide: 2
   minTrianglesToDivide: 64
 --- !u!4 &1375216953

@@ -13,7 +13,7 @@ public class OctreeNode
     public bool HasChildren => children.Count > 0;
 
     public List<TriangleReference> triangles = new();
-    public List<Car> cars = new();
+    public List<BaseCollisionObject> objects = new();
 
     public List<OctreeNode> Children => children;
     public float Size => size;
@@ -37,20 +37,23 @@ public class OctreeNode
         new Vector3(1, 1, 1)
     };
 
-    OctreeNode(Vector3 position, float size, OctreeNode parent)
+    public OctreeNode(Vector3 position, float size, OctreeNode parent)
     {
         _position = position;
         this.size = size;
         Parent = parent;
         triangles = new();
-        cars = new();
+        objects = new();
     }
 
 
-    private void OnDrawGizmos()
+    public void Draw()
     {
         Gizmos.color = Color.green;
-        Gizmos.DrawWireCube(_position, new Vector3(size, size, size));
+        Gizmos.DrawWireCube(_position, Vector3.one * size);
+
+        foreach (var child in children)
+            child.Draw();
     }
 
     [ContextMenu("Generate Children")]
@@ -76,6 +79,17 @@ public class OctreeNode
         newChild._position = childPosition;
         newChild.size = newSize;
         return newChild;
+    }
+
+    public void Clear()
+    {
+        objects.Clear();
+        triangles.Clear();
+
+        foreach (OctreeNode child in children)
+            child.Clear();
+
+        children.Clear();
     }
 
     public void SetPosition(Vector3 position)
