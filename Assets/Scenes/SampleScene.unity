@@ -156,6 +156,7 @@ MonoBehaviour:
   restitution: 0.3
   meshRenderer: {fileID: 65176529}
   meshFilter: {fileID: 65176530}
+  lateralFriction: 12
   rotationSpeed: 70
   jumpImpulse: 5
 --- !u!23 &65176529
@@ -248,7 +249,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 65dd5e2569b252046b65dfcd5f89862c, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 13.6
+      value: 14.96
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 65dd5e2569b252046b65dfcd5f89862c, type: 3}
       propertyPath: m_LocalRotation.w
@@ -750,6 +751,7 @@ MonoBehaviour:
   restitution: 0.3
   meshRenderer: {fileID: 845769769}
   meshFilter: {fileID: 845769770}
+  lateralFriction: 12
   rotationSpeed: 70
   jumpImpulse: 5
 --- !u!23 &845769769
@@ -869,6 +871,7 @@ MonoBehaviour:
   minSize: 0.2
   minObjectsToDivide: 2
   minTrianglesToDivide: 64
+  binarySearchLimit: 12
 --- !u!4 &1375216953
 Transform:
   m_ObjectHideFlags: 0
@@ -907,6 +910,7 @@ MonoBehaviour:
   restitution: 0.3
   meshRenderer: {fileID: 1129308234}
   meshFilter: {fileID: 1129308235}
+  lateralFriction: 12
   rotationSpeed: 70
   jumpImpulse: 5
 --- !u!1 &2070076504 stripped
@@ -932,6 +936,7 @@ MonoBehaviour:
   restitution: 0.3
   meshRenderer: {fileID: 644617584}
   meshFilter: {fileID: 644617585}
+  lateralFriction: 12
   rotationSpeed: 70
   jumpImpulse: 5
 --- !u!1660057539 &9223372036854775807

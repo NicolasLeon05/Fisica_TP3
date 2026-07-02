@@ -9,8 +9,12 @@ public abstract class BaseCollisionObject : MonoBehaviour
     public abstract CollisionVolume CollisionVolume { get; }
 
     public abstract List<Triangle> Triangles { get; }
+    public abstract List<TriangleReference> TriangleReferences { get; }
 
     public abstract Sphere GetTriangleSphere(Triangle triangle);
+
+    public abstract float Mass { get; }
+    public abstract float Restitution { get; }
 
     public void SaveState()
     {
@@ -45,6 +49,10 @@ public abstract class BaseCollisionObject : MonoBehaviour
 
         CurrentState = state;
     }
+
+    public abstract void UpdateTriangleWorldData();
+
+    public abstract void UpdateTriangleReferences();
 
     protected abstract Vector3 GetLinearVelocity();
 

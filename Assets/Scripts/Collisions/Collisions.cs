@@ -3,6 +3,7 @@ using UnityEngine;
 
 public static class Collisions
 {
+    const float EPSILON = 0.0001f;
     public static bool AABBvsAABB(AABB bounds1, AABB bounds2)
     {
         if (bounds1.Max.x < bounds2.Min.x || bounds1.Min.x > bounds2.Max.x)
@@ -89,14 +90,12 @@ public static class Collisions
 
                 List<TriangleReference> list = new();
 
-                foreach (Triangle triangle in obj.Triangles)
+                foreach (TriangleReference reference in obj.TriangleReferences)
                 {
-                    Sphere sphere = obj.GetTriangleSphere(triangle);
-
-                    if (!SphereVsAABB(sphere, node.Bounds))
+                    if (!SphereVsAABB(reference.sphere, node.Bounds))
                         continue;
 
-                    list.Add(new TriangleReference(obj, triangle, sphere));
+                    list.Add(reference);
                 }
 
                 if (list.Count > 0)
@@ -124,92 +123,90 @@ public static class Collisions
     }
 
     public static bool VertexPlaneTest(TriangleReference planeTriangle, TriangleReference testTriangle,
-        out Vector3 oppositeVertex, out Vector3 edgeVertex1, out Vector3 edgeVertex2)
+    out Vector3 oppositeVertex, out Vector3 edgeVertex1, out Vector3 edgeVertex2)
     {
         oppositeVertex = Vector3.zero;
         edgeVertex1 = Vector3.zero;
         edgeVertex2 = Vector3.zero;
 
-        //Triangulo del plano (en mundo)
-        Vector3 p1 = planeTriangle.owner.transform.TransformPoint(planeTriangle.triangle.v1);
-        Vector3 p2 = planeTriangle.owner.transform.TransformPoint(planeTriangle.triangle.v2);
-        Vector3 p3 = planeTriangle.owner.transform.TransformPoint(planeTriangle.triangle.v3);
+        Vector3 p1 = planeTriangle.worldV1;
+        Vector3 normal = planeTriangle.normal;
 
-        //Normal del plano
-        Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
+        Vector3 v0 = testTriangle.worldV1;
+        Vector3 v1 = testTriangle.worldV2;
+        Vector3 v2 = testTriangle.worldV3;
 
-        //Vertices del otro triangulo (en mundo)
-        Vector3[] vertices =
-        {
-        testTriangle.owner.transform.TransformPoint(testTriangle.triangle.v1),
-        testTriangle.owner.transform.TransformPoint(testTriangle.triangle.v2),
-        testTriangle.owner.transform.TransformPoint(testTriangle.triangle.v3)
-        };
+        float d0 = Vector3.Dot(normal, v0 - p1);
+        float d1 = Vector3.Dot(normal, v1 - p1);
+        float d2 = Vector3.Dot(normal, v2 - p1);
 
-        float[] distances = new float[3];
+        bool hasPositive =
+            d0 > EPSILON ||
+            d1 > EPSILON ||
+            d2 > EPSILON;
 
-        bool hasPositive = false;
-        bool hasNegative = false;
+        bool hasNegative =
+            d0 < -EPSILON ||
+            d1 < -EPSILON ||
+            d2 < -EPSILON;
 
-        for (int i = 0; i < 3; i++)
-        {
-            distances[i] = Vector3.Dot(normal, vertices[i] - p1);
-
-            if (distances[i] > 0f)
-                hasPositive = true;
-            else if (distances[i] < 0f)
-                hasNegative = true;
-        }
-
-        //Si todos estan del mismo lado, no atraviesa el plano.
         if (!(hasPositive && hasNegative))
             return false;
 
-        //Devolver el vertice que quedo solo del otro lado.
-        if (hasPositive)
+        int positives = (d0 > EPSILON ? 1 : 0)
+                      + (d1 > EPSILON ? 1 : 0)
+                      + (d2 > EPSILON ? 1 : 0);
+
+        if (positives == 1)
         {
-            int positives = 0;
-            int index = -1;
-
-            for (int i = 0; i < 3; i++)
+            if (d0 > EPSILON)
             {
-                if (distances[i] > 0f)
-                {
-                    positives++;
-                    index = i;
-                }
+                oppositeVertex = v0;
+                edgeVertex1 = v1;
+                edgeVertex2 = v2;
+            }
+            else if (d1 > EPSILON)
+            {
+                oppositeVertex = v1;
+                edgeVertex1 = v2;
+                edgeVertex2 = v0;
+            }
+            else
+            {
+                oppositeVertex = v2;
+                edgeVertex1 = v0;
+                edgeVertex2 = v1;
             }
 
-            if (positives == 1)
-            {
-                oppositeVertex = vertices[index];
-                edgeVertex1 = vertices[(index + 1) % 3];
-                edgeVertex2 = vertices[(index + 2) % 3];
-                return true;
-            }
+            return true;
         }
 
-        if (hasNegative)
+        int negatives = (d0 < -EPSILON ? 1 : 0)
+                      + (d1 < -EPSILON ? 1 : 0)
+                      + (d2 < -EPSILON ? 1 : 0);
+
+        if (negatives == 1)
         {
-            int negatives = 0;
-            int index = -1;
-
-            for (int i = 0; i < 3; i++)
+            if (d0 < -EPSILON)
             {
-                if (distances[i] < 0f)
-                {
-                    negatives++;
-                    index = i;
-                }
+                oppositeVertex = v0;
+                edgeVertex1 = v1;
+                edgeVertex2 = v2;
+            }
+            else if (d1 < -EPSILON)
+            {
+                oppositeVertex = v1;
+                edgeVertex1 = v2;
+                edgeVertex2 = v0;
+            }
+            else
+            {
+                oppositeVertex = v2;
+                edgeVertex1 = v0;
+                edgeVertex2 = v1;
             }
 
-            if (negatives == 1)
-            {
-                oppositeVertex = vertices[index];
-                edgeVertex1 = vertices[(index + 1) % 3];
-                edgeVertex2 = vertices[(index + 2) % 3];    
-                return true;
-            }
+            return true;
         }
 
         return false;
@@ -221,9 +218,9 @@ public static class Collisions
         hitPoint = Vector3.zero;
         const float EPSILON = 0.00001f;
 
-        Vector3 v0 = triangle.owner.transform.TransformPoint(triangle.triangle.v1);
-        Vector3 v1 = triangle.owner.transform.TransformPoint(triangle.triangle.v2);
-        Vector3 v2 = triangle.owner.transform.TransformPoint(triangle.triangle.v3);
+        Vector3 v0 = triangle.worldV1;
+        Vector3 v1 = triangle.worldV2;
+        Vector3 v2 = triangle.worldV3;
 
         Vector3 edge1 = v1 - v0;
         Vector3 edge2 = v2 - v0;

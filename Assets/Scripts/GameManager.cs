@@ -18,10 +18,12 @@ public class GameManager : MonoBehaviour
     [Header("Constraints")]
     [SerializeField] private float minObjectsToDivide = 2f;
     [SerializeField] private float minTrianglesToDivide = 64f;
-    [SerializeField] private int binarySearchLimit = 12;
+    [SerializeField] private int binarySearchLimit = 8;
 
     private List<OctreeNode> octreeNodes = new List<OctreeNode>();
     private readonly List<CollisionInfo> collisions = new List<CollisionInfo>();
+    private readonly Dictionary<(BaseCollisionObject, BaseCollisionObject), CollisionInfo> contacts = new();
+    private readonly List<CollisionInfo> candidateBuffer = new();
 
     private void Awake()
     {
@@ -87,16 +89,27 @@ public class GameManager : MonoBehaviour
 
     private void FixedUpdate()
     {
+        foreach (BaseCollisionObject obj in objects)
+            obj.SaveState();
+
+        foreach (BaseCollisionObject obj in objects)
+                obj.UpdateTriangleReferences();
+
         collisions.Clear();
+        contacts.Clear();
 
         parentNode.Clear();
         octreeNodes.Clear();
+
         UpdateOctree(parentNode);
 
+        collisions.AddRange(contacts.Values);
+        Debug.Log($"Contactos: {contacts.Count}");
         foreach (CollisionInfo collision in collisions)
             ResolveCollision(collision);
 
         collisions.Clear();
+        contacts.Clear();
 
         ClearNodeTriangles();
     }
@@ -108,22 +121,71 @@ public class GameManager : MonoBehaviour
         info.objectA.InterpolateState(t);
         info.objectB.InterpolateState(t);
 
+        info.objectA.UpdateTriangleWorldData();
+        info.objectB.UpdateTriangleWorldData();
+
         info.collisionTime = t;
 
         if (!CheckCollision(info))
         {
             info.objectA.RestoreState(info.currentStateA);
             info.objectB.RestoreState(info.currentStateB);
+
+            info.objectA.UpdateTriangleWorldData();
+            info.objectB.UpdateTriangleWorldData();
             return;
         }
 
         CalculateContactData(info);
+        if (info.penetration < 0.0001f)
+        {
+            info.objectA.RestoreState(info.currentStateA);
+            info.objectB.RestoreState(info.currentStateB);
 
-        // TODO
-        // Calcular impulso
+            info.objectA.UpdateTriangleWorldData();
+            info.objectB.UpdateTriangleWorldData();
+            return;
+        }
 
-        info.objectA.RestoreState(info.currentStateA);
-        info.objectB.RestoreState(info.currentStateB);
+        PhysicsState stateA = info.objectA.CurrentState;
+        PhysicsState stateB = info.objectB.CurrentState;
+
+        float invMassA = 1f / info.objectA.Mass;
+        float invMassB = 1f / info.objectB.Mass;
+
+        float totalInvMass = invMassA + invMassB;
+
+        const float slop = 0.01f;
+        const float percent = 0.4f;
+        float correctionAmount = Mathf.Max(info.penetration - slop, 0f) / totalInvMass * percent;
+
+        Vector3 correction = correctionAmount * info.contactNormal;
+
+        stateA.Position -= correction * invMassA;
+        stateB.Position += correction * invMassB;
+
+
+        Vector3 relativeVelocity = stateB.LinearVelocity - stateA.LinearVelocity;
+
+        float velocityAlongNormal = Vector3.Dot(relativeVelocity, info.contactNormal);
+
+        if (velocityAlongNormal < 0f)
+        {
+            float restitution = Mathf.Min(info.objectA.Restitution, info.objectB.Restitution);
+
+            float j = -(1f + restitution) * velocityAlongNormal;
+            j /= totalInvMass;
+
+            Vector3 impulse = j * info.contactNormal;
+
+            stateA.LinearVelocity -= impulse * invMassA;
+            stateB.LinearVelocity += impulse * invMassB;
+        }
+
+        info.objectA.RestoreState(stateA);
+        info.objectB.RestoreState(stateB);
+        info.objectA.UpdateTriangleWorldData();
+        info.objectB.UpdateTriangleWorldData();
     }
 
     private float FindCollisionTime(CollisionInfo info, int iterations)
@@ -144,7 +206,11 @@ public class GameManager : MonoBehaviour
                 left = mid;
         }
 
+        info.objectA.RestoreState(info.currentStateA);
+        info.objectB.RestoreState(info.currentStateB);
+
         return right;
+
     }
 
     private bool CheckCollision(CollisionInfo info)
@@ -198,14 +264,13 @@ public class GameManager : MonoBehaviour
     {
         TriangleReference plane = info.planeTriangle;
 
-        Vector3 p1 = plane.owner.transform.TransformPoint(plane.triangle.v1);
-        Vector3 p2 = plane.owner.transform.TransformPoint(plane.triangle.v2);
-        Vector3 p3 = plane.owner.transform.TransformPoint(plane.triangle.v3);
+        Vector3 p1 = plane.worldV1;
+        Vector3 p2 = plane.worldV2;
+        Vector3 p3 = plane.worldV3;
 
-        Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
+        Vector3 normal = plane.normal;
 
-        // Siempre apuntar hacia el objeto que penetra
-        Vector3 planeCenter = (p1 + p2 + p3) / 3f;
+        Vector3 planeCenter = (p1 + p2 + p3) * (1f / 3f);
 
         if (Vector3.Dot(normal, info.penetratingVertex - planeCenter) < 0f)
             normal = -normal;
@@ -231,7 +296,7 @@ public class GameManager : MonoBehaviour
 
     private List<CollisionInfo> GetCollisionCandidates(OctreeNode node)
     {
-        List<CollisionInfo> results = new();
+        candidateBuffer.Clear();
 
         List<BaseCollisionObject> owners = new(node.triangles.Keys);
 
@@ -250,13 +315,13 @@ public class GameManager : MonoBehaviour
                         if (!Collisions.SphereVsSphere(triangleA.sphere, triangleB.sphere))
                             continue;
 
-                        results.Add(BuildCollisionInfo(triangleA, triangleB));
+                        candidateBuffer.Add(BuildCollisionInfo(triangleA, triangleB));
                     }
                 }
             }
         }
 
-        return results;
+        return candidateBuffer;
     }
 
     private void UpdateOctree(OctreeNode node)
@@ -280,6 +345,9 @@ public class GameManager : MonoBehaviour
         if (!Collisions.ObjectsCollideInsideNode(node))
             return;
 
+        //foreach (BaseCollisionObject obj in node.objects)
+        //    obj.UpdateTriangleReferences();
+
         // 3) Insertar unicamente los triangulos de esos autos dentro del nodo
         Collisions.SaveTriangleOctree(node);
 
@@ -298,19 +366,21 @@ public class GameManager : MonoBehaviour
         if (node.triangles.Count < 2)
             return;
 
+        Debug.Log($"Triangles node: {node.GetTriangleCount()}");
         // 5) Sphere vs Sphere de los triangulos
         List<CollisionInfo> candidates = GetCollisionCandidates(node);
-
+        Debug.Log($"Candidates: {candidates.Count}");
         if (candidates.Count == 0)
             return;
 
-        // 6) 
+        // 6 y 7) 
         foreach (CollisionInfo collision in candidates)
         {
             if (!CheckCollision(collision))
                 continue;
 
-            collisions.Add(collision);
+            CalculateContactData(collision);
+            RegisterContact(collision);
         }
 
     }
@@ -332,6 +402,23 @@ public class GameManager : MonoBehaviour
         info.currentStateB = triangleB.owner.CurrentState;
 
         return info;
+    }
+
+    private void RegisterContact(CollisionInfo info)
+    {
+        BaseCollisionObject a = info.objectA;
+        BaseCollisionObject b = info.objectB;
+
+        var key = a.GetInstanceID() < b.GetInstanceID() ? (a, b) : (b, a);
+
+        if (!contacts.TryGetValue(key, out CollisionInfo current))
+        {
+            contacts.Add(key, info);
+            return;
+        }
+
+        if (info.penetration > current.penetration)
+            contacts[key] = info;
     }
 
     private void OnDrawGizmos()
