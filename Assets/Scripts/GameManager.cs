@@ -173,23 +173,34 @@ public class GameManager : MonoBehaviour
         if (collidingTriangles == null)
             return;
 
-        // ==========================================
         // 6) Vertex vs Plane
-        // ==========================================
+        Vector3 oppositeVertex;
+        Vector3 edgeVertex1;
+        Vector3 edgeVertex2;
 
-        // TODO
+        if (!Collisions.VertexPlaneTest(collidingTriangles[0], collidingTriangles[1],
+                out oppositeVertex, out edgeVertex1, out edgeVertex2))
+            return;
 
-        // ==========================================
         // 7) Ray vs Triangle
-        // ==========================================
+        Vector3 dir1 = (edgeVertex1 - oppositeVertex).normalized;
+        Vector3 dir2 = (edgeVertex2 - oppositeVertex).normalized;
 
-        // TODO
+        float dist1 = Vector3.Distance(oppositeVertex, edgeVertex1);
+        float dist2 = Vector3.Distance(oppositeVertex, edgeVertex2);
+
+        bool hit = Collisions.RayVsTriangle(oppositeVertex, dir1, dist1, collidingTriangles[0]) ||
+            Collisions.RayVsTriangle(oppositeVertex, dir2, dist2, collidingTriangles[0]);
+
+        //if (hit)
+        //    Debug.Log("Colision confirmada");
+        //Resolver colision
     }
 
 
     private void OnDrawGizmos()
     {
-        if (parentNode != null)
-            parentNode.Draw();
+        //if (parentNode != null)
+        //    parentNode.Draw();
     }
 }
