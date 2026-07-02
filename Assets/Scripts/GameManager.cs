@@ -366,6 +366,9 @@ public class GameManager : MonoBehaviour
         if (node.triangles.Count < 2)
             return;
 
+        if (node.HasChildren)
+            return;
+
         Debug.Log($"Triangles node: {node.GetTriangleCount()}");
         // 5) Sphere vs Sphere de los triangulos
         List<CollisionInfo> candidates = GetCollisionCandidates(node);
