@@ -35,7 +35,7 @@ public static class Collisions
         return (a.center - b.center).sqrMagnitude <= radiusSum * radiusSum;
     }
 
-    public static bool ObjectsCollisionInsideNode(OctreeNode node)
+    public static bool ObjectsCollideInsideNode(OctreeNode node)
     {
         for (int i = 0; i < node.objects.Count; i++)
             for (int j = i + 1; j < node.objects.Count; j++)
@@ -215,8 +215,10 @@ public static class Collisions
         return false;
     }
 
-    public static bool RayVsTriangle(Vector3 rayOrigin, Vector3 rayDirection, float maxDistance, TriangleReference triangle)
+    public static bool RayVsTriangle(Vector3 rayOrigin, Vector3 rayDirection, float maxDistance, TriangleReference triangle,
+        out Vector3 hitPoint)
     {
+        hitPoint = Vector3.zero;
         const float EPSILON = 0.00001f;
 
         Vector3 v0 = triangle.owner.transform.TransformPoint(triangle.triangle.v1);
@@ -250,7 +252,11 @@ public static class Collisions
 
         float t = f * Vector3.Dot(edge2, q);
 
-        return t >= 0f && t <= maxDistance;
+        if (t < 0f || t > maxDistance)
+            return false;
+
+        hitPoint = rayOrigin + rayDirection * t;
+        return true;
     }
 
     public static bool VolumeVsAABB(CollisionVolume volume, AABB bounds)

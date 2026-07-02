@@ -12,14 +12,6 @@ public class Triangle
 
     public Sphere localBoundingSphere;
 
-    // World (se actualizan una vez por frame)
-    public Vector3 worldV1;
-    public Vector3 worldV2;
-    public Vector3 worldV3;
-
-    public Vector3 worldNormal;
-    public Sphere worldBoundingSphere;
-
     public Triangle(Vector3 v1, Vector3 v2, Vector3 v3)
     {
         this.v1 = v1;
@@ -33,21 +25,6 @@ public class Triangle
         center = (v1 + v2 + v3) / 3f;
 
         localBoundingSphere = CreateBoundingSphere();
-    }
-
-    public void UpdateWorldData(Transform t)
-    {
-        worldV1 = t.TransformPoint(v1);
-        worldV2 = t.TransformPoint(v2);
-        worldV3 = t.TransformPoint(v3);
-
-        worldNormal = t.TransformDirection(normal).normalized;
-
-        Vector3 worldCenter = t.TransformPoint(localBoundingSphere.center);
-
-        float scale = Mathf.Max(t.lossyScale.x, Mathf.Max(t.lossyScale.y, t.lossyScale.z));
-
-        worldBoundingSphere = new Sphere(worldCenter, localBoundingSphere.radius * scale);
     }
 
     private Sphere CreateBoundingSphere()

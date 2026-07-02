@@ -65,13 +65,15 @@ public class Car : BaseCollisionObject
     private void Awake()
     {
         SaveTriangles();
+        SaveState();
+        PreviousState = CurrentState;
     }
 
 
     private void FixedUpdate()
     {
         SimulateMovement();
-        //UpdateTriangleCache();
+        SaveState();
     }
 
     private void SimulateMovement()
@@ -167,10 +169,27 @@ public class Car : BaseCollisionObject
         //return triangle.worldBoundingSphere;
     }
 
-    public void UpdateTriangleCache()
+    protected override Vector3 GetLinearVelocity()
     {
-        for (int i = 0; i < triangles.Count; i++)
-            triangles[i].UpdateWorldData(transform);
+        return linearVelocity;
+    }
+
+    protected override Vector3 GetAngularVelocity()
+    {
+        float steering = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
+
+        return Vector3.up * rotationInput * rotationSpeed * steering;
+    }
+
+    protected override void SetLinearVelocity(Vector3 velocity)
+    {
+        forwardSpeed = Vector3.Dot(velocity, transform.forward);
+        verticalSpeed = velocity.y;
+    }
+
+    protected override void SetAngularVelocity(Vector3 velocity)
+    {
+        //TODO
     }
 
     private void OnDrawGizmos()
@@ -181,6 +200,7 @@ public class Car : BaseCollisionObject
         if (triangles == null)
             return;
 
+        //DRAW TRIANGLES MINIMUM SPHERES
         //foreach (Triangle triangle in triangles)
         //{
         //    Sphere sphere = GetTriangleSphere(triangle);
