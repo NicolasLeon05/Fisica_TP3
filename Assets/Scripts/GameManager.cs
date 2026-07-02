@@ -1,6 +1,7 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Threading.Tasks;
+using System;
 
 public class GameManager : MonoBehaviour
 {
@@ -22,6 +23,11 @@ public class GameManager : MonoBehaviour
 
     private List<OctreeNode> octreeNodes = new List<OctreeNode>();
     private readonly List<CollisionInfo> collisions = new List<CollisionInfo>();
+
+    //private ParallelOptions options = new ParallelOptions
+    //{
+    //    MaxDegreeOfParallelism = Environment.ProcessorCount
+    //};
 
     private void Awake()
     {
@@ -93,8 +99,15 @@ public class GameManager : MonoBehaviour
         octreeNodes.Clear();
         UpdateOctree(parentNode);
 
-        foreach (CollisionInfo collision in collisions)
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Environment.ProcessorCount // Limit threads
+        };
+
+        Parallel.ForEach(collisions, options, collision =>
+        {
             ResolveCollision(collision);
+        });
 
         collisions.Clear();
 
@@ -305,13 +318,24 @@ public class GameManager : MonoBehaviour
             return;
 
         // 6) 
-        foreach (CollisionInfo collision in candidates)
+        var options = new ParallelOptions
         {
-            if (!CheckCollision(collision))
-                continue;
+            MaxDegreeOfParallelism = Environment.ProcessorCount // Limit threads
+        };
 
-            collisions.Add(collision);
-        }
+        Parallel.ForEach(candidates, options, collision =>
+        {
+            if (CheckCollision(collision))
+                collisions.Add(collision);
+        });
+
+        //foreach (CollisionInfo collision in candidates)
+        //{
+        //    if (!CheckCollision(collision))
+        //        continue;
+        //
+        //    collisions.Add(collision);
+        //}
 
     }
 
@@ -336,7 +360,7 @@ public class GameManager : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        //if (parentNode != null)
-        //    parentNode.Draw();
+        if (parentNode != null)
+            parentNode.Draw();
     }
 }

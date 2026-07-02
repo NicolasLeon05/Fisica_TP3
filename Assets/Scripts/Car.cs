@@ -171,7 +171,8 @@ public class Car : BaseCollisionObject
 
     protected override Vector3 GetLinearVelocity()
     {
-        return linearVelocity;
+        return Vector3.zero;
+        //return linearVelocity;
     }
 
     protected override Vector3 GetAngularVelocity()
