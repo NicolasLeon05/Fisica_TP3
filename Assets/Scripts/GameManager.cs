@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Threading.Tasks;
 
 public class GameManager : MonoBehaviour
 {
@@ -24,6 +25,11 @@ public class GameManager : MonoBehaviour
     private readonly List<CollisionInfo> collisions = new List<CollisionInfo>();
     private readonly Dictionary<(BaseCollisionObject, BaseCollisionObject), CollisionInfo> contacts = new();
     private readonly List<CollisionInfo> candidateBuffer = new();
+
+    private ParallelOptions options = new ParallelOptions
+    {
+        MaxDegreeOfParallelism = Environment.ProcessorCount
+    };
 
     private void Awake()
     {

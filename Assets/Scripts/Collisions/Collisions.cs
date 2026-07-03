@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public static class Collisions
@@ -81,45 +83,64 @@ public static class Collisions
 
     public static void SaveTriangleOctree(OctreeNode node)
     {
+        ParallelOptions options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = Environment.ProcessorCount
+        };
+
         if (node.Parent == null)
         {
-            foreach (BaseCollisionObject obj in node.objects)
+            Parallel.ForEach(node.objects, options, obj =>
             {
-                if (obj.Triangles == null)
-                    continue;
-
-                List<TriangleReference> list = new();
-
-                foreach (TriangleReference reference in obj.TriangleReferences)
+                if (!(obj.Triangles == null))
                 {
-                    if (!SphereVsAABB(reference.sphere, node.Bounds))
-                        continue;
 
-                    list.Add(reference);
+                    List<TriangleReference> list = new();
+
+                    Parallel.ForEach(obj.TriangleReferences, options, reference =>
+                    {
+                        if (SphereVsAABB(reference.sphere, node.Bounds))
+                            list.Add(reference);
+                    });
+
+                    if (list.Count > 0)
+                        node.triangles.Add(obj, list);
                 }
-
-                if (list.Count > 0)
-                    node.triangles.Add(obj, list);
-            }
+            });
 
             return;
         }
 
-        foreach (var pair in node.Parent.triangles)
+        Parallel.ForEach(node.Parent.triangles, options, pair =>
         {
             List<TriangleReference> list = new();
 
-            foreach (TriangleReference triangle in pair.Value)
-            {
-                if (!SphereVsAABB(triangle.sphere, node.Bounds))
-                    continue;
-
-                list.Add(triangle);
-            }
+                Parallel.ForEach(pair.Value, options, triangle =>
+                {
+                    if (SphereVsAABB(triangle.sphere, node.Bounds))
+                        list.Add(triangle);
+                });
 
             if (list.Count > 0)
                 node.triangles.Add(pair.Key, list);
-        }
+
+        });
+
+        //foreach (var pair in node.Parent.triangles)
+        //{
+        //    List<TriangleReference> list = new();
+        //
+        //    foreach (TriangleReference triangle in pair.Value)
+        //    {
+        //        if (!SphereVsAABB(triangle.sphere, node.Bounds))
+        //            continue;
+        //
+        //        list.Add(triangle);
+        //    }
+        //
+        //    if (list.Count > 0)
+        //        node.triangles.Add(pair.Key, list);
+        //}
     }
 
     public static bool VertexPlaneTest(TriangleReference planeTriangle, TriangleReference testTriangle,
