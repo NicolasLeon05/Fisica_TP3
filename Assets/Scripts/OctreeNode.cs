@@ -9,6 +9,7 @@ public class OctreeNode
 
     private const int DIVIDE_AMOUNT = 8;
     private OctreeNode parent = null;
+    private int depth;
 
     public bool HasChildren => children.Count > 0;
 
@@ -23,6 +24,9 @@ public class OctreeNode
         get => parent;
         set => parent = value;
     }
+    public int Depth => depth;
+
+
     private Vector3 _position;
 
     private static readonly Vector3[] Directions = new Vector3[]
@@ -42,6 +46,7 @@ public class OctreeNode
         _position = position;
         this.size = size;
         Parent = parent;
+        depth = parent == null ? 0 : parent.depth + 1;
         triangles = new();
         objects = new();
     }

@@ -3,11 +3,14 @@ public class TriangleReference
     public BaseCollisionObject owner;
     public Triangle triangle;
     public Sphere sphere;
+    public int triangleIndex;
 
-    public TriangleReference(BaseCollisionObject owner, Triangle triangle, Sphere sphere)
+    public int lastUpdatedStep = -1;
+
+    public TriangleReference(BaseCollisionObject owner, Triangle triangle, int triangleIndex)
     {
         this.owner = owner;
         this.triangle = triangle;
-        this.sphere = sphere;
+        this.triangleIndex = triangleIndex;
     }
 }

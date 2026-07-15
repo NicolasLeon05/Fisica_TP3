@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using Unity.Burst.Intrinsics;
 using UnityEngine;
 
 public class Car : BaseCollisionObject
@@ -10,19 +8,23 @@ public class Car : BaseCollisionObject
     [SerializeField] private float inputForce = 150f;
     [SerializeField] private float frictionCoefficient = 0.5f;
     [SerializeField] private float restitution = 0.3f;
+    [SerializeField] private float lateralFrictionCoefficient = 2.5f;
+    [SerializeField] private float angularDamping = 3f;
     [SerializeField] private MeshRenderer meshRenderer;
     [SerializeField] private MeshFilter meshFilter;
 
     [Header("Rotation")]
     [SerializeField] private float rotationSpeed = 70f;
+    [SerializeField] private float angularAcceleration = 360f;
 
     [Header("Jump")]
     [SerializeField] private float jumpImpulse = 5f;
 
     private const float GRAVITY = 9.8f;
 
-    private float forwardSpeed;
-    private float verticalSpeed;
+    private Vector3 linearVelocity;
+    private Vector3 angularVelocity;
+    private Vector3 inverseInertiaTensor;
 
     private float movementInput;
     private float rotationInput;
@@ -30,22 +32,31 @@ public class Car : BaseCollisionObject
     private bool isGrounded = true;
 
     private List<Triangle> triangles = new List<Triangle>();
+    private TriangleReference[] triangleReferences;
 
-
-    public float Mass => mass;
-    public float Restitution => restitution;
+    public override float Mass => mass;
+    public override float Restitution => restitution;
     public AABB Bounds => new AABB(transform.position, meshRenderer.bounds.extents * 2);
+
+    private BVHNode bvhRoot;
+    public override BVHNode BVHRoot => bvhRoot;
 
     public float ForwardSpeed
     {
-        get => forwardSpeed;
-        set => forwardSpeed = value;
+        get => Vector3.Dot(linearVelocity, transform.forward);
+        set
+        {
+            Vector3 forward = transform.forward;
+            float currentForwardSpeed = Vector3.Dot(linearVelocity, forward);
+
+            linearVelocity += forward * (value - currentForwardSpeed);
+        }
     }
 
     public float VerticalSpeed
     {
-        get => verticalSpeed;
-        set => verticalSpeed = value;
+        get => linearVelocity.y;
+        set => linearVelocity.y = value;
     }
 
     private AABBVolume collisionVolume;
@@ -60,17 +71,35 @@ public class Car : BaseCollisionObject
         }
     }
 
+    public override Vector3 CenterOfMass
+    {
+        get
+        {
+            Vector3 localCenter = meshFilter.sharedMesh.bounds.center;
+            return transform.TransformPoint(localCenter);
+        }
+    }
+
     public override List<Triangle> Triangles => triangles;
 
     private void Awake()
     {
         SaveTriangles();
+        CreateTriangleReferences();
+        CalculateInverseInertiaTensor();
+
+        bvhRoot = BVHBuilder.Build(triangles);
+
         SaveState();
         PreviousState = CurrentState;
+
+        Debug.Log($"{name}: {Triangles.Count} triángulos");
+        Debug.Log($"{name}: {meshFilter.sharedMesh.vertexCount} meshFilter.sharedMesh.vertexCount");
+        Debug.Log($"{name}: {meshFilter.sharedMesh.triangles.Length} meshFilter.sharedMesh.triangles.Length");
     }
 
 
-    private void FixedUpdate()
+    public void SimulatePhysicsStep()
     {
         SimulateMovement();
         SaveState();
@@ -79,6 +108,10 @@ public class Car : BaseCollisionObject
     private void SimulateMovement()
     {
         float dt = Time.fixedDeltaTime;
+
+        Vector3 forward = transform.forward;
+        float forwardSpeed = Vector3.Dot(linearVelocity, forward);
+
         float appliedForce = movementInput * inputForce;
         float normalForce = mass * GRAVITY;
         float frictionForce = 0f;
@@ -86,30 +119,87 @@ public class Car : BaseCollisionObject
         if (Mathf.Abs(forwardSpeed) > 0.001f)
         {
             frictionForce = -Mathf.Sign(forwardSpeed) * frictionCoefficient * normalForce;
+
+            // Evitar que la fricción invierta la velocidad.
+            float maximumStoppingForce = Mathf.Abs(forwardSpeed) * mass / dt;
+
+            frictionForce = Mathf.Clamp(frictionForce, -maximumStoppingForce, maximumStoppingForce);
         }
-        else if (movementInput != 0)
+        else if (movementInput != 0f)
         {
-            float maxStatic = frictionCoefficient * normalForce;
+            float maximumStaticFriction = frictionCoefficient * normalForce;
 
-            if (Mathf.Abs(appliedForce) < maxStatic)
+            if (Mathf.Abs(appliedForce) < maximumStaticFriction)
             {
-                forwardSpeed = 0;
-                return;
+                linearVelocity -= forward * forwardSpeed;
+                appliedForce = 0f;
             }
-
-            frictionForce = -Mathf.Sign(appliedForce) * maxStatic;
+            else
+            {
+                frictionForce = -Mathf.Sign(appliedForce) * maximumStaticFriction;
+            }
         }
 
-        float acceleration = (appliedForce + frictionForce) / mass;
-        forwardSpeed += acceleration * dt;
+        float forwardAcceleration = (appliedForce + frictionForce) / mass;
+        linearVelocity += forward * forwardAcceleration * dt;
 
-        if (movementInput == 0 && Mathf.Abs(forwardSpeed) < 0.01f)
-            forwardSpeed = 0;
+        ApplyLateralFriction(dt);
 
-        transform.position += transform.forward * forwardSpeed * dt + Vector3.up * verticalSpeed * dt;
+        if (!isGrounded)
+            linearVelocity += Vector3.down * GRAVITY * dt;
 
-        float steering = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
-        transform.Rotate(Vector3.up, rotationInput * rotationSpeed * steering * dt);
+        transform.position += linearVelocity * dt;
+
+        float updatedForwardSpeed = Vector3.Dot(linearVelocity, transform.forward);
+
+        float steering = Mathf.Clamp01(Mathf.Abs(updatedForwardSpeed) / 5f);
+        Vector3 steeringAxis = transform.up;
+
+        float targetAngularSpeed = rotationInput * rotationSpeed * Mathf.Deg2Rad * steering;
+        float currentSteeringSpeed = Vector3.Dot(angularVelocity, steeringAxis);
+
+        float maximumAngularChange = angularAcceleration * Mathf.Deg2Rad * dt;
+        float angularChange = Mathf.Clamp(targetAngularSpeed - currentSteeringSpeed, -maximumAngularChange, maximumAngularChange);
+
+        angularVelocity += steeringAxis * angularChange;
+
+        if (Mathf.Abs(rotationInput) < 0.001f)
+            ApplyAngularDamping(dt);
+
+        IntegrateRotation(dt);
+    }
+
+    private void ApplyLateralFriction(float dt)
+    {
+        if (!isGrounded)
+            return;
+
+        Vector3 right = transform.right;
+        float lateralSpeed = Vector3.Dot(linearVelocity, right);
+
+        if (Mathf.Abs(lateralSpeed) <= 0.001f)
+        {
+            linearVelocity -= right * lateralSpeed;
+            return;
+        }
+
+        float maximumLateralAcceleration = lateralFrictionCoefficient * GRAVITY;
+        float requiredAcceleration = -lateralSpeed / dt;
+        float lateralAcceleration = Mathf.Clamp(requiredAcceleration, -maximumLateralAcceleration, maximumLateralAcceleration);
+
+        linearVelocity += right * lateralAcceleration * dt;
+    }
+
+    private void ApplyAngularDamping(float dt)
+    {
+        if (!isGrounded)
+            return;
+
+        float dampingFactor = Mathf.Max(0f, 1f - angularDamping * dt);
+        angularVelocity *= dampingFactor;
+
+        if (angularVelocity.sqrMagnitude < 0.0001f)
+            angularVelocity = Vector3.zero;
     }
 
     public void Jump()
@@ -117,7 +207,7 @@ public class Car : BaseCollisionObject
         if (!isGrounded)
             return;
 
-        verticalSpeed = jumpImpulse;
+        linearVelocity.y = jumpImpulse;
         isGrounded = false;
     }
 
@@ -156,56 +246,110 @@ public class Car : BaseCollisionObject
         }
     }
 
+    private void IntegrateRotation(float dt)
+    {
+        float angularSpeed = angularVelocity.magnitude;
+
+        if (angularSpeed <= Mathf.Epsilon)
+            return;
+
+        Vector3 axis = angularVelocity / angularSpeed;
+
+        float angleDegrees = angularSpeed * Mathf.Rad2Deg * dt;
+        Quaternion rotationDelta = Quaternion.AngleAxis(angleDegrees, axis);
+
+        transform.rotation = rotationDelta * transform.rotation;
+    }
+
+    private void CalculateInverseInertiaTensor()
+    {
+        Vector3 meshSize = meshFilter.sharedMesh.bounds.size;
+        Vector3 scale = new Vector3(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.y), Mathf.Abs(transform.lossyScale.z));
+        Vector3 size = Vector3.Scale(meshSize, scale);
+
+        float width = size.x;
+        float height = size.y;
+        float depth = size.z;
+
+        float inertiaX = mass * (height * height + depth * depth) / 12f;
+        float inertiaY = mass * (width * width + depth * depth) / 12f;
+        float inertiaZ = mass * (width * width + height * height) / 12f;
+
+        inverseInertiaTensor = new Vector3(
+            inertiaX > Mathf.Epsilon ? 1f / inertiaX : 0f,
+            inertiaY > Mathf.Epsilon ? 1f / inertiaY : 0f,
+            inertiaZ > Mathf.Epsilon ? 1f / inertiaZ : 0f);
+    }
+
+    public override Vector3 ApplyInverseInertiaTensor(Vector3 worldVector)
+    {
+        Vector3 localVector = transform.InverseTransformDirection(worldVector);
+
+        Vector3 localResult = new Vector3(
+            localVector.x * inverseInertiaTensor.x,
+            localVector.y * inverseInertiaTensor.y,
+            localVector.z * inverseInertiaTensor.z);
+
+        return transform.TransformDirection(localResult);
+    }
+
     public override Sphere GetTriangleSphere(Triangle triangle)
     {
         Vector3 worldCenter = transform.TransformPoint(triangle.localBoundingSphere.center);
 
-        float scale =
-            Mathf.Max(
-                transform.lossyScale.x,
-                Mathf.Max(transform.lossyScale.y, transform.lossyScale.z));
+        float scale = Mathf.Max(transform.lossyScale.x, Mathf.Max(transform.lossyScale.y, transform.lossyScale.z));
 
         return new Sphere(worldCenter, triangle.localBoundingSphere.radius * scale);
-        //return triangle.worldBoundingSphere;
     }
+
+
 
     protected override Vector3 GetLinearVelocity()
     {
         return linearVelocity;
     }
 
-    protected override Vector3 GetAngularVelocity()
-    {
-        float steering = Mathf.Clamp01(Mathf.Abs(forwardSpeed) / 5f);
-
-        return Vector3.up * rotationInput * rotationSpeed * steering;
-    }
-
     protected override void SetLinearVelocity(Vector3 velocity)
     {
-        forwardSpeed = Vector3.Dot(velocity, transform.forward);
-        verticalSpeed = velocity.y;
+        linearVelocity = velocity;
+    }
+
+    protected override Vector3 GetAngularVelocity()
+    {
+        return angularVelocity;
     }
 
     protected override void SetAngularVelocity(Vector3 velocity)
     {
-        //TODO
+        angularVelocity = velocity;
+    }
+
+    private void CreateTriangleReferences()
+    {
+        triangleReferences = new TriangleReference[triangles.Count];
+
+        for (int i = 0; i < triangles.Count; i++)
+        {
+            triangleReferences[i] = new TriangleReference(this, triangles[i], i);
+        }
+    }
+
+
+    public override TriangleReference GetTriangleReference(int triangleIndex, int collisionStep)
+    {
+        TriangleReference reference = triangleReferences[triangleIndex];
+
+        if (reference.lastUpdatedStep == collisionStep)
+            return reference;
+
+        reference.sphere = GetTriangleSphere(reference.triangle);
+        reference.lastUpdatedStep = collisionStep;
+        return reference;
     }
 
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireCube(Bounds.center, Bounds.halfSize * 2);
-
-        if (triangles == null)
-            return;
-
-        //DRAW TRIANGLES MINIMUM SPHERES
-        //foreach (Triangle triangle in triangles)
-        //{
-        //    Sphere sphere = GetTriangleSphere(triangle);
-        //    Gizmos.color = Color.cyan;
-        //    Gizmos.DrawWireSphere(sphere.center, sphere.radius);
-        //}
     }
 }

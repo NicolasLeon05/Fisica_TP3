@@ -11,6 +11,7 @@ public class Triangle
     public Vector3 center;
 
     public Sphere localBoundingSphere;
+    public AABB localAABB;
 
     public Triangle(Vector3 v1, Vector3 v2, Vector3 v3)
     {
@@ -25,6 +26,7 @@ public class Triangle
         center = (v1 + v2 + v3) / 3f;
 
         localBoundingSphere = CreateBoundingSphere();
+        localAABB = CreateAABB();
     }
 
     private Sphere CreateBoundingSphere()
@@ -74,5 +76,16 @@ public class Triangle
         }
 
         return sphere;
+    }
+
+    private AABB CreateAABB()
+    {
+        Vector3 min = Vector3.Min(v1, Vector3.Min(v2, v3));
+        Vector3 max = Vector3.Max(v1, Vector3.Max(v2, v3));
+
+        Vector3 center = (min + max) * 0.5f;
+        Vector3 size = max - min;
+
+        return new AABB(center, size);
     }
 }
