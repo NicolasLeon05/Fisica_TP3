@@ -8,10 +8,7 @@ public abstract class BaseCollisionObject : MonoBehaviour
 
     public abstract float Mass { get; }
     public abstract float Restitution { get; }
-
-    public abstract BVHNode BVHRoot { get; }
-
-    public abstract CollisionVolume CollisionVolume { get; }
+    public abstract float FrictionCoefficient { get; }
 
     public abstract AABB LocalBounds { get; }
 
@@ -20,12 +17,6 @@ public abstract class BaseCollisionObject : MonoBehaviour
     public abstract TriangleReference[] TriangleReferences { get; }
 
     public abstract Sphere GetTriangleSphere(Triangle triangle);
-
-    public abstract Vector3 CenterOfMass { get; }
-
-    public abstract Vector3 ApplyInverseInertiaTensor(Vector3 worldVector);
-
-    public abstract Vector3 LocalCenterOfMass { get; }
 
     public abstract Transform CollisionMeshTransform { get; }
 
@@ -40,13 +31,6 @@ public abstract class BaseCollisionObject : MonoBehaviour
     public Vector3 CollisionPointToWorld(Vector3 localPoint)
     {
         return CollisionMeshTransform.TransformPoint(localPoint);
-    }
-
-    public Vector3 GetCenterOfMassAtState(PhysicsState state)
-    {
-        Vector3 scaledCenter = Vector3.Scale(LocalCenterOfMass, transform.lossyScale);
-
-        return state.Position + state.Rotation * scaledCenter;
     }
 
     public void SaveState()
@@ -140,54 +124,6 @@ public abstract class BaseCollisionObject : MonoBehaviour
         CurrentState = current;
 
         ApplyTemporaryState(current);
-    }
-
-    public AABB TransformAABB(AABB localAABB)
-    {
-        Vector3 min = localAABB.Min;
-        Vector3 max = localAABB.Max;
-
-        Vector3[] corners =
-        {
-        new Vector3(min.x, min.y, min.z),
-        new Vector3(max.x, min.y, min.z),
-        new Vector3(min.x, max.y, min.z),
-        new Vector3(max.x, max.y, min.z),
-
-        new Vector3(min.x, min.y, max.z),
-        new Vector3(max.x, min.y, max.z),
-        new Vector3(min.x, max.y, max.z),
-        new Vector3(max.x, max.y, max.z)
-    };
-
-        Vector3 worldMin = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
-        Vector3 worldMax = new Vector3(float.MinValue, float.MinValue, float.MinValue);
-
-        foreach (Vector3 corner in corners)
-        {
-            Vector3 world = transform.TransformPoint(corner);
-
-            worldMin = Vector3.Min(worldMin, world);
-            worldMax = Vector3.Max(worldMax, world);
-        }
-
-        return new AABB((worldMin + worldMax) * 0.5f, worldMax - worldMin);
-    }
-
-    public AABB InverseTransformAABB(AABB worldAABB)
-    {
-        Vector3 center = transform.InverseTransformPoint(worldAABB.center);
-
-        Vector3 right = transform.InverseTransformVector(Vector3.right * worldAABB.halfSize.x);
-        Vector3 up = transform.InverseTransformVector(Vector3.up * worldAABB.halfSize.y);
-        Vector3 forward = transform.InverseTransformVector(Vector3.forward * worldAABB.halfSize.z);
-
-        Vector3 halfSize = new Vector3(
-            Mathf.Abs(right.x) + Mathf.Abs(up.x) + Mathf.Abs(forward.x),
-            Mathf.Abs(right.y) + Mathf.Abs(up.y) + Mathf.Abs(forward.y),
-            Mathf.Abs(right.z) + Mathf.Abs(up.z) + Mathf.Abs(forward.z));
-
-        return new AABB(center, halfSize * 2f);
     }
 
     public abstract TriangleReference GetTriangleReference(int triangleIndex, int collisionStep);

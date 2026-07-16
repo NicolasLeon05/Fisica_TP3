@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class TriangleOctree
+public class TriangleOctree
 {
     private readonly Vector3 center;
     private readonly float rootSize;

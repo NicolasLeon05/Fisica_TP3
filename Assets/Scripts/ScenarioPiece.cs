@@ -9,19 +9,14 @@ public class ScenarioPiece : BaseCollisionObject
 
     [Header("Mesh")]
     [SerializeField] private MeshFilter meshFilter;
-    [SerializeField] private MeshRenderer meshRenderer;
 
     private readonly List<Triangle> triangles = new();
     private TriangleReference[] triangleReferences;
-    private BVHNode bvhRoot;
-    private AABBVolume collisionVolume;
 
     public override float Mass => 0f;
     public override float Restitution => restitution;
+    public override float FrictionCoefficient => frictionCoefficient;
 
-    public float FrictionCoefficient => frictionCoefficient;
-
-    public override BVHNode BVHRoot => bvhRoot;
     public override List<Triangle> Triangles => triangles;
     public override TriangleReference[] TriangleReferences
     {
@@ -30,11 +25,6 @@ public class ScenarioPiece : BaseCollisionObject
             return triangleReferences;
         }
     }
-    public override Vector3 CenterOfMass => transform.position;
-
-    public AABB Bounds => new AABB(meshRenderer.bounds.center, meshRenderer.bounds.size);
-
-    public override Vector3 LocalCenterOfMass => meshFilter.sharedMesh.bounds.center;
 
     public override AABB LocalBounds
     {
@@ -52,29 +42,14 @@ public class ScenarioPiece : BaseCollisionObject
             return meshFilter.transform;
         }
     }
-    public override CollisionVolume CollisionVolume
-    {
-        get
-        {
-            collisionVolume ??= new AABBVolume(Bounds);
-            collisionVolume.Bounds = Bounds;
-            return collisionVolume;
-        }
-    }
 
     private void Awake()
     {
         SaveTriangles();
         CreateTriangleReferences();
 
-        bvhRoot = BVHBuilder.Build(triangles);
-
         SaveState();
         PreviousState = CurrentState;
-
-        Debug.Log($"{name}: {Triangles.Count} triángulos");
-        Debug.Log($"{name}: {meshFilter.sharedMesh.vertexCount} meshFilter.sharedMesh.vertexCount");
-        Debug.Log($"{name}: {meshFilter.sharedMesh.triangles.Length} meshFilter.sharedMesh.triangles.Length");
     }
 
     private void SaveTriangles()
@@ -104,17 +79,24 @@ public class ScenarioPiece : BaseCollisionObject
         {
             TriangleReference reference = new TriangleReference(this, triangles[i], i);
 
-            reference.sphere = GetTriangleSphere(triangles[i]);
-            reference.bounds = GetTriangleWorldBounds(triangles[i]);
-            triangleReferences[i] = reference;
+            Sphere initialSphere = GetTriangleSphere(triangles[i]);
+            AABB initialBounds = GetTriangleWorldBounds(triangles[i]);
+
+            reference.currentSphere = initialSphere;
+            reference.sphere = initialSphere;
+            reference.currentBounds = initialBounds;
+            reference.bounds = initialBounds;
+            reference.lastUpdatedStep = 0;
+
+            triangleReferences[i] =                reference;
         }
     }
 
     private AABB GetTriangleWorldBounds(Triangle triangle)
     {
-        Vector3 p1 = transform.TransformPoint(triangle.v1);
-        Vector3 p2 = transform.TransformPoint(triangle.v2);
-        Vector3 p3 = transform.TransformPoint(triangle.v3);
+        Vector3 p1 = CollisionPointToWorld(triangle.v1);
+        Vector3 p2 = CollisionPointToWorld(triangle.v2);
+        Vector3 p3 = CollisionPointToWorld(triangle.v3);
 
         Vector3 minimum = Vector3.Min(p1, Vector3.Min(p2, p3));
         Vector3 maximum = Vector3.Max(p1, Vector3.Max(p2, p3));
@@ -127,9 +109,9 @@ public class ScenarioPiece : BaseCollisionObject
 
     public override Sphere GetTriangleSphere(Triangle triangle)
     {
-        Vector3 p1 = transform.TransformPoint(triangle.v1);
-        Vector3 p2 = transform.TransformPoint(triangle.v2);
-        Vector3 p3 = transform.TransformPoint(triangle.v3);
+        Vector3 p1 = CollisionPointToWorld(triangle.v1);
+        Vector3 p2 = CollisionPointToWorld(triangle.v2);
+        Vector3 p3 = CollisionPointToWorld(triangle.v3);
 
         return Collisions.GetMinimumTriangleSphere(p1, p2, p3);
     }
@@ -137,11 +119,6 @@ public class ScenarioPiece : BaseCollisionObject
     public override TriangleReference GetTriangleReference(int triangleIndex, int collisionStep)
     {
         return triangleReferences[triangleIndex];
-    }
-
-    public override Vector3 ApplyInverseInertiaTensor(Vector3 worldVector)
-    {
-        return Vector3.zero;
     }
 
     protected override Vector3 GetLinearVelocity()

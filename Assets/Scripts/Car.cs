@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Threading.Tasks;
 
-public class Car : BaseCollisionObject
+public class Car : BaseCollisionObject, IDynamicCollisionBody
 {
     [Header("Physics")]
     [SerializeField] private float mass = 10f;
@@ -19,7 +19,7 @@ public class Car : BaseCollisionObject
     [SerializeField] private float angularAcceleration = 360f;
 
     [Header("Jump")]
-    [SerializeField] private float jumpImpulse = 5f;
+    [SerializeField] private float jumpImpulse = 50f;
 
     [Header("Ground Support")]
     [SerializeField] private Transform[] supportPoints;
@@ -46,6 +46,8 @@ public class Car : BaseCollisionObject
     public float GroundAlignSpeed => groundAlignSpeed;
     public float MaximumSupportCorrection => maximumSupportCorrection;
     public float SupportDetachVelocity => supportDetachVelocity;
+    public BaseCollisionObject CollisionObject => this;
+
 
     public bool IsGrounded => isGrounded;
     public Vector3 GroundNormal => groundNormal;
@@ -55,7 +57,7 @@ public class Car : BaseCollisionObject
 
     private Vector3 linearVelocity;
     private Vector3 angularVelocity;
-    private Vector3 inverseInertiaTensor;
+    private Vector3 accumulatedImpulse;
 
     private float movementInput;
     private float rotationInput;
@@ -71,23 +73,8 @@ public class Car : BaseCollisionObject
     }
     public override float Mass => mass;
     public override float Restitution => restitution;
+    public override float FrictionCoefficient => frictionCoefficient;
     public AABB Bounds => new AABB(meshRenderer.bounds.center, meshRenderer.bounds.extents * 2);
-
-    private BVHNode bvhRoot;
-    public override BVHNode BVHRoot => bvhRoot;
-    public override Vector3 LocalCenterOfMass => meshFilter.sharedMesh.bounds.center;
-
-    public float ForwardSpeed
-    {
-        get => Vector3.Dot(linearVelocity, transform.forward);
-        set
-        {
-            Vector3 forward = transform.forward;
-            float currentForwardSpeed = Vector3.Dot(linearVelocity, forward);
-
-            linearVelocity += forward * (value - currentForwardSpeed);
-        }
-    }
 
     public override Transform CollisionMeshTransform
     {
@@ -96,14 +83,6 @@ public class Car : BaseCollisionObject
             return meshFilter.transform;
         }
     }
-
-    public float VerticalSpeed
-    {
-        get => linearVelocity.y;
-        set => linearVelocity.y = value;
-    }
-
-    private AABBVolume collisionVolume;
 
     public override AABB LocalBounds
     {
@@ -115,46 +94,22 @@ public class Car : BaseCollisionObject
         }
     }
 
-    public override CollisionVolume CollisionVolume
-    {
-        get
-        {
-            AABB sweptBounds = GetSweptBounds();
-
-            collisionVolume ??= new AABBVolume(sweptBounds);
-            collisionVolume.Bounds = sweptBounds;
-
-            return collisionVolume;
-        }
-    }
-
-    public override Vector3 CenterOfMass
-    {
-        get
-        {
-            Vector3 localCenter = meshFilter.sharedMesh.bounds.center;
-            return transform.TransformPoint(localCenter);
-        }
-    }
-
     public override List<Triangle> Triangles => triangles;
 
     private void Awake()
     {
         SaveTriangles();
         CreateTriangleReferences();
-        CalculateInverseInertiaTensor();
-
-        bvhRoot = BVHBuilder.Build(triangles);
 
         SaveState();
         PreviousState = CurrentState;
+
+        UpdateTriangleReferencesParallel(0);
 
         Debug.Log($"{name}: {Triangles.Count} triángulos");
         Debug.Log($"{name}: {meshFilter.sharedMesh.vertexCount} meshFilter.sharedMesh.vertexCount");
         Debug.Log($"{name}: {meshFilter.sharedMesh.triangles.Length} meshFilter.sharedMesh.triangles.Length");
     }
-
 
     public void SimulatePhysicsStep()
     {
@@ -165,6 +120,8 @@ public class Car : BaseCollisionObject
     private void SimulateMovement()
     {
         float dt = Time.fixedDeltaTime;
+
+        ApplyAccumulatedImpulses();
 
         Vector3 forward = transform.forward;
         float forwardSpeed = Vector3.Dot(linearVelocity, forward);
@@ -262,15 +219,11 @@ public class Car : BaseCollisionObject
         if (!isGrounded)
             return;
 
-        linearVelocity.y = jumpImpulse;
-        isGrounded = false;
-    }
+        Vector3 jumpDirection = groundNormal.sqrMagnitude > Mathf.Epsilon ? groundNormal.normalized : transform.up;
 
-    public void SetGrounded(bool grounded)
-    {
-        isGrounded = grounded;
+        AddImpulse(jumpDirection * jumpImpulse);
+        ClearGroundSupport();
     }
-
 
     public void SetMovementInput(float value)
     {
@@ -284,7 +237,7 @@ public class Car : BaseCollisionObject
 
     private void SaveTriangles()
     {
-        Mesh mesh = meshFilter.mesh;
+        Mesh mesh = meshFilter.sharedMesh;
 
         Vector3[] vertices = mesh.vertices;
         int[] trianglesArray = mesh.triangles;
@@ -316,59 +269,45 @@ public class Car : BaseCollisionObject
         transform.rotation = rotationDelta * transform.rotation;
     }
 
-    private void CalculateInverseInertiaTensor()
+    public void UpdateTriangleReferencesParallel(int collisionStep)
     {
-        Vector3 meshSize = meshFilter.sharedMesh.bounds.size;
-        Vector3 scale = new Vector3(Mathf.Abs(transform.lossyScale.x), Mathf.Abs(transform.lossyScale.y), Mathf.Abs(transform.lossyScale.z));
-        Vector3 size = Vector3.Scale(meshSize, scale);
+        Matrix4x4 matrix = CollisionLocalToWorldMatrix;
 
-        float width = size.x;
-        float height = size.y;
-        float depth = size.z;
-
-        float inertiaX = mass * (height * height + depth * depth) / 12f;
-        float inertiaY = mass * (width * width + depth * depth) / 12f;
-        float inertiaZ = mass * (width * width + height * height) / 12f;
-
-        inverseInertiaTensor = new Vector3(
-            inertiaX > Mathf.Epsilon ? 1f / inertiaX : 0f,
-            inertiaY > Mathf.Epsilon ? 1f / inertiaY : 0f,
-            inertiaZ > Mathf.Epsilon ? 1f / inertiaZ : 0f);
-    }
-
-    public void UpdateTriangleReferencesParallel(Matrix4x4 localToWorldMatrix, int collisionStep)
-    {
         Parallel.For(0, triangleReferences.Length, i =>
+        {
+            TriangleReference reference = triangleReferences[i];
+            Triangle triangle = reference.triangle;
+
+            Vector3 p1 = matrix.MultiplyPoint3x4(triangle.v1);
+            Vector3 p2 = matrix.MultiplyPoint3x4(triangle.v2);
+            Vector3 p3 = matrix.MultiplyPoint3x4(triangle.v3);
+
+            Vector3 sphereCenter = (p1 + p2 + p3) / 3f;
+            float radiusSquared = Mathf.Max((p1 - sphereCenter).sqrMagnitude, Mathf.Max((p2 - sphereCenter).sqrMagnitude, (p3 - sphereCenter).sqrMagnitude));
+
+            Sphere newCurrentSphere = new Sphere(sphereCenter, Mathf.Sqrt(radiusSquared));
+
+            Vector3 minimum = Vector3.Min(p1, Vector3.Min(p2, p3));
+            Vector3 maximum = Vector3.Max(p1, Vector3.Max(p2, p3));
+            AABB newCurrentBounds = new AABB((minimum + maximum) * 0.5f, maximum - minimum);
+
+            bool hasPreviousState = reference.lastUpdatedStep >= 0 && reference.currentBounds != null;
+
+            if (hasPreviousState)
             {
-                TriangleReference reference = triangleReferences[i];
+                reference.bounds = Collisions.MergeAABB(reference.currentBounds, newCurrentBounds);
+                reference.sphere = Collisions.MergeSpheres(reference.currentSphere, newCurrentSphere);
+            }
+            else
+            {
+                reference.bounds = newCurrentBounds;
+                reference.sphere = newCurrentSphere;
+            }
 
-                Triangle triangle = reference.triangle;
-
-                Vector3 p1 = localToWorldMatrix.MultiplyPoint3x4(triangle.v1);
-                Vector3 p2 = localToWorldMatrix.MultiplyPoint3x4(triangle.v2);
-                Vector3 p3 = localToWorldMatrix.MultiplyPoint3x4(triangle.v3);
-                Vector3 sphereCenter = (p1 + p2 + p3) / 3f;
-
-                float radiusSquared = Mathf.Max((p1 - sphereCenter).sqrMagnitude, Mathf.Max((p2 - sphereCenter).sqrMagnitude, (p3 - sphereCenter).sqrMagnitude));
-                reference.sphere = new Sphere(sphereCenter, Mathf.Sqrt(radiusSquared));
-
-                Vector3 minimum = Vector3.Min(p1, Vector3.Min(p2, p3));
-                Vector3 maximum = Vector3.Max(p1, Vector3.Max(p2, p3));
-
-                reference.bounds = new AABB((minimum + maximum) * 0.5f, maximum - minimum);
-                reference.lastUpdatedStep = collisionStep;
-            });
-    }
-
-    public void BeginContactDetection()
-    {
-        isGrounded = false;
-    }
-
-    public void SetGroundContact(Vector3 normal)
-    {
-        isGrounded = true;
-        groundNormal = normal.normalized;
+            reference.currentBounds = newCurrentBounds;
+            reference.currentSphere = newCurrentSphere;
+            reference.lastUpdatedStep = collisionStep;
+        });
     }
 
     public void SetGroundSupport(ScenarioPiece piece, Vector3 normal)
@@ -378,29 +317,37 @@ public class Car : BaseCollisionObject
         groundNormal = normal.normalized;
     }
 
+    public void AddImpulse(Vector3 impulse)
+    {
+        accumulatedImpulse += impulse;
+    }
+
+    private void ApplyAccumulatedImpulses()
+    {
+        if (accumulatedImpulse.sqrMagnitude <= Mathf.Epsilon)
+            return;
+
+        if (mass <= Mathf.Epsilon)
+        {
+            accumulatedImpulse = Vector3.zero;
+            return;
+        }
+
+        linearVelocity += accumulatedImpulse / mass;
+        accumulatedImpulse = Vector3.zero;
+    }
+
     public void ClearGroundSupport()
     {
         isGrounded = false;
         groundPiece = null;
     }
 
-    public override Vector3 ApplyInverseInertiaTensor(Vector3 worldVector)
-    {
-        Vector3 localVector = transform.InverseTransformDirection(worldVector);
-
-        Vector3 localResult = new Vector3(
-            localVector.x * inverseInertiaTensor.x,
-            localVector.y * inverseInertiaTensor.y,
-            localVector.z * inverseInertiaTensor.z);
-
-        return transform.TransformDirection(localResult);
-    }
-
     public override Sphere GetTriangleSphere(Triangle triangle)
     {
-        Vector3 p1 = transform.TransformPoint(triangle.v1);
-        Vector3 p2 = transform.TransformPoint(triangle.v2);
-        Vector3 p3 = transform.TransformPoint(triangle.v3);
+        Vector3 p1 = CollisionPointToWorld(triangle.v1);
+        Vector3 p2 = CollisionPointToWorld(triangle.v2);
+        Vector3 p3 = CollisionPointToWorld(triangle.v3);
 
         return Collisions.GetMinimumTriangleSphere(p1, p2, p3);
     }

@@ -5,7 +5,10 @@ public class TriangleReference
     public int triangleIndex;
 
     public Sphere sphere;
+    public Sphere currentSphere;
+
     public AABB bounds;
+    public AABB currentBounds;
 
     public int lastUpdatedStep;
 
@@ -14,5 +17,7 @@ public class TriangleReference
         this.owner = owner;
         this.triangle = triangle;
         this.triangleIndex = triangleIndex;
+
+        lastUpdatedStep = -1;
     }
 }

@@ -2,72 +2,11 @@ using UnityEngine;
 
 public static class Collisions
 {
-    public static bool AABBvsAABB(AABB bounds1, AABB bounds2)
-    {
-        if (bounds1.Max.x < bounds2.Min.x || bounds1.Min.x > bounds2.Max.x)
-            return false;
-        if (bounds1.Max.y < bounds2.Min.y || bounds1.Min.y > bounds2.Max.y)
-            return false;
-        if (bounds1.Max.z < bounds2.Min.z || bounds1.Min.z > bounds2.Max.z)
-            return false;
-
-        return true;
-    }
-
-    public static bool SphereVsAABB(Sphere sphere, AABB bounds)
-    {
-        float x = Mathf.Clamp(sphere.center.x, bounds.Min.x, bounds.Max.x);
-        float y = Mathf.Clamp(sphere.center.y, bounds.Min.y, bounds.Max.y);
-        float z = Mathf.Clamp(sphere.center.z, bounds.Min.z, bounds.Max.z);
-
-        Vector3 closestPoint = new Vector3(x, y, z);
-
-        Vector3 difference = sphere.center - closestPoint;
-
-        return difference.sqrMagnitude <= sphere.radius * sphere.radius;
-    }
-
     public static bool SphereVsSphere(Sphere a, Sphere b)
     {
         float radiusSum = a.radius + b.radius;
 
         return (a.center - b.center).sqrMagnitude <= radiusSum * radiusSum;
-    }
-
-    private static bool CountTrianglesInBVH(BVHNode bvhNode, BaseCollisionObject owner, AABB localOctreeBounds, int triangleLimit, ref int triangleCount)
-    {
-        if (bvhNode == null)
-            return false;
-
-        //Todo esta en espacio local.
-        if (!AABBvsAABB(bvhNode.Bounds, localOctreeBounds))
-            return false;
-
-        if (!bvhNode.IsLeaf)
-        {
-            if (CountTrianglesInBVH(bvhNode.Left, owner, localOctreeBounds, triangleLimit, ref triangleCount))
-                return true;
-
-            if (CountTrianglesInBVH(bvhNode.Right, owner, localOctreeBounds, triangleLimit, ref triangleCount))
-                return true;
-
-            return false;
-        }
-
-        foreach (int triangleIndex in bvhNode.TriangleIndices)
-        {
-            Triangle triangle = owner.Triangles[triangleIndex];
-
-            if (!AABBvsAABB(triangle.localAABB, localOctreeBounds))
-                continue;
-
-            triangleCount++;
-
-            if (triangleCount >= triangleLimit)
-                return true;
-        }
-
-        return false;
     }
 
     public static bool VertexPlaneTest(TriangleReference planeTriangle, TriangleReference testTriangle,
@@ -206,34 +145,6 @@ public static class Collisions
         return true;
     }
 
-    public static bool VolumeVsAABB(CollisionVolume volume, AABB bounds)
-    {
-        if (volume is AABBVolume aabb)
-            return AABBvsAABB(aabb.Bounds, bounds);
-
-        if (volume is SphereVolume sphere)
-            return SphereVsAABB(sphere.Sphere, bounds);
-
-        return false;
-    }
-
-    public static bool VolumeVsVolume(CollisionVolume a, CollisionVolume b)
-    {
-        if (a is AABBVolume aa && b is AABBVolume bb)
-            return AABBvsAABB(aa.Bounds, bb.Bounds);
-
-        if (a is SphereVolume sa && b is SphereVolume sb)
-            return SphereVsSphere(sa.Sphere, sb.Sphere);
-
-        if (a is SphereVolume s && b is AABBVolume ab)
-            return SphereVsAABB(s.Sphere, ab.Bounds);
-
-        if (a is AABBVolume ba && b is SphereVolume ss)
-            return SphereVsAABB(ss.Sphere, ba.Bounds);
-
-        return false;
-    }
-
     public static bool AABBIntersectsAABB(AABB a, AABB b)
     {
         Vector3 difference = a.center - b.center;
@@ -243,6 +154,7 @@ public static class Collisions
             Mathf.Abs(difference.y) <= a.halfSize.y + b.halfSize.y &&
             Mathf.Abs(difference.z) <= a.halfSize.z + b.halfSize.z;
     }
+
     public static Sphere GetMinimumTriangleSphere(Vector3 a, Vector3 b, Vector3 c)
     {
         float abSquared = (b - a).sqrMagnitude;
@@ -298,5 +210,47 @@ public static class Collisions
         float circumradius = Vector3.Distance(circumcenter, a);
 
         return new Sphere(circumcenter, circumradius);
+    }
+
+    public static AABB MergeAABB(AABB a, AABB b)
+    {
+        if (a == null)
+            return b;
+
+        if (b == null)
+            return a;
+
+        Vector3 minimum = Vector3.Min(a.Min, b.Min);
+        Vector3 maximum = Vector3.Max(a.Max, b.Max);
+
+        return new AABB((minimum + maximum) * 0.5f, maximum - minimum);
+    }
+
+    public static Sphere MergeSpheres(Sphere a, Sphere b)
+    {
+        if (a.radius <= 0f)
+            return b;
+
+        if (b.radius <= 0f)
+            return a;
+
+        Vector3 difference = b.center - a.center;
+        float distance = difference.magnitude;
+        
+        //Una esfera contiene completamente a la otra.  
+        if (a.radius >= distance + b.radius)
+            return a;
+
+        if (b.radius >= distance + a.radius)
+            return b;
+
+        if (distance <= Mathf.Epsilon)
+            return new Sphere(a.center, Mathf.Max(a.radius, b.radius));
+
+        float mergedRadius = (distance + a.radius + b.radius) * 0.5f;
+        Vector3 direction = difference / distance;
+        Vector3 mergedCenter = a.center + direction * (mergedRadius - a.radius);
+
+        return new Sphere(mergedCenter, mergedRadius);
     }
 }

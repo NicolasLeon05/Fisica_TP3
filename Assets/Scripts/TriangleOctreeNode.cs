@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class TriangleOctreeNode
+public class TriangleOctreeNode
 {
     public AABB Bounds { get; }
     public int Depth { get; }
