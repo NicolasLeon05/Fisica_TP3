@@ -130,6 +130,19 @@ public abstract class BaseCollisionObject : MonoBehaviour
         ApplyTemporaryState(current);
     }
 
+    public void ResetSimulationState(Vector3 position, Quaternion rotation)
+    {
+        PhysicsState state = new PhysicsState
+        {
+            Position = position,
+            Rotation = rotation,
+            LinearVelocity = Vector3.zero,
+            AngularVelocity = Vector3.zero
+        };
+
+        SetSimulationStates(state, state);
+    }
+
     public abstract TriangleReference GetTriangleReference(int triangleIndex, int collisionStep);
 
     protected abstract Vector3 GetLinearVelocity();

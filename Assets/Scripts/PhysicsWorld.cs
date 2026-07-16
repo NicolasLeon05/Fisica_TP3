@@ -25,7 +25,6 @@ public class PhysicsWorld : MonoBehaviour
     [SerializeField] private int dynamicTrianglesPerNode = 512;
 
     [Header("Collision detection")]
-    [SerializeField] private int maxPreciseCandidatesPerPair = 12;
     [SerializeField] private int maxContactsPerPair = 1;
 
     [Header("Continuous collision")]

@@ -5,7 +5,7 @@ public class Car : BaseCollisionObject, IDynamicCollisionBody
 {
     [Header("Physics")]
     [SerializeField] private float mass = 10f;
-    [SerializeField] private float inputForce = 150f;
+    [SerializeField] private float acceleration = 150f;
     [SerializeField] private float frictionCoefficient = 0.5f;
     [SerializeField] private float restitution = 0.3f;
     [SerializeField] private float lateralFrictionCoefficient = 2.5f;
@@ -125,36 +125,38 @@ public class Car : BaseCollisionObject, IDynamicCollisionBody
         Vector3 forward = transform.forward;
         float forwardSpeed = Vector3.Dot(linearVelocity, forward);
 
-        float appliedForce = movementInput * inputForce;
-        float normalForce = mass * GRAVITY;
-        float frictionForce = 0f;
+        float appliedAcceleration = movementInput * acceleration;
+        float frictionAcceleration = 0f;
 
         if (Mathf.Abs(forwardSpeed) > 0.001f)
         {
-            frictionForce = -Mathf.Sign(forwardSpeed) * frictionCoefficient * normalForce;
-
-            // Evitar que la friccion invierta la velocidad.
-            float maximumStoppingForce = Mathf.Abs(forwardSpeed) * mass / dt;
-
-            frictionForce = Mathf.Clamp(frictionForce, -maximumStoppingForce, maximumStoppingForce);
+            frictionAcceleration = -Mathf.Sign(forwardSpeed) * frictionCoefficient * GRAVITY;
+            float maximumStoppingAcceleration = Mathf.Abs(forwardSpeed) / dt;
+            frictionAcceleration = Mathf.Clamp(frictionAcceleration, -maximumStoppingAcceleration, maximumStoppingAcceleration);
         }
         else if (movementInput != 0f)
         {
-            float maximumStaticFriction = frictionCoefficient * normalForce;
+            float maximumStaticFrictionAcceleration = frictionCoefficient * GRAVITY;
 
-            if (Mathf.Abs(appliedForce) < maximumStaticFriction)
+            if (Mathf.Abs(appliedAcceleration) < maximumStaticFrictionAcceleration)
             {
                 linearVelocity -= forward * forwardSpeed;
-                appliedForce = 0f;
+                appliedAcceleration = 0f;
             }
             else
             {
-                frictionForce = -Mathf.Sign(appliedForce) * maximumStaticFriction;
+                frictionAcceleration = -Mathf.Sign(appliedAcceleration) * maximumStaticFrictionAcceleration;
             }
         }
 
-        float forwardAcceleration = (appliedForce + frictionForce) / mass;
-        linearVelocity += forward * forwardAcceleration * dt;
+        float forwardAcceleration =
+            appliedAcceleration +
+            frictionAcceleration;
+
+        linearVelocity +=
+            forward *
+            forwardAcceleration *
+            dt;
 
         ApplyLateralFriction(dt);
 
@@ -340,6 +342,18 @@ public class Car : BaseCollisionObject, IDynamicCollisionBody
     {
         isGrounded = false;
         groundPiece = null;
+    }
+
+    public void ResetCar(Vector3 position, Quaternion rotation)
+    {
+        movementInput = 0f;
+        rotationInput = 0f;
+
+        accumulatedImpulse = Vector3.zero;
+
+        ClearGroundSupport();
+
+        ResetSimulationState(position, rotation);
     }
 
     public override Sphere GetTriangleSphere(Triangle triangle)

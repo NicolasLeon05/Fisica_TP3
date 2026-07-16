@@ -13,6 +13,11 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
     [Header("Mesh")]
     [SerializeField] private MeshFilter meshFilter;
 
+    [Header("Ball Size")]
+    [SerializeField, Min(0.01f)] private float radius = 0.75f;
+
+    public float Radius => radius;
+
     private readonly List<Triangle> triangles = new();
 
     private TriangleReference[] triangleReferences;
@@ -43,8 +48,17 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
         }
     }
 
+    public Vector3 WorldCenter
+    {
+        get
+        {
+            return CollisionMeshTransform.TransformPoint(meshFilter.sharedMesh.bounds.center);
+        }
+    }
+
     private void Awake()
     {
+        ApplyRadius();
         SaveTriangles();
         CreateTriangleReferences();
 
@@ -130,6 +144,23 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
         }
     }
 
+    private void ApplyRadius()
+    {
+        float diameter = radius * 2f;
+        transform.localScale = Vector3.one * diameter;
+    }
+
+    private void OnValidate()
+    {
+        radius = Mathf.Max(radius, 0.01f);
+        ApplyRadius();
+    }
+
+    public void ResetBall(Vector3 position, Quaternion rotation)
+    {
+        ResetSimulationState(position, rotation);
+    }
+
     public override TriangleReference GetTriangleReference(int triangleIndex, int collisionStep)
     {
         return triangleReferences[triangleIndex];
@@ -162,4 +193,13 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
     protected override void SetAngularVelocity(Vector3 velocity)
     {
     }
+    private void OnDrawGizmosSelected()
+    {
+        if (meshFilter == null)
+            return;
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(WorldCenter, radius);
+    }
+
 }

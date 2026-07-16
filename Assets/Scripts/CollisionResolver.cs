@@ -45,7 +45,7 @@ public class CollisionResolver
             return;
         }
 
-        OrientContactNormal(info, impactStateA, impactStateB);
+        //OrientContactNormal(info, impactStateA, impactStateB);
 
         ResolveImpulse(
             info,

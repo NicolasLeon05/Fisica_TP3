@@ -173,18 +173,35 @@ public static class TriangleCollisionTester
     private static void CalculateContactData(CollisionInfo info)
     {
         TriangleReference plane = info.planeTriangle;
+        TriangleReference penetrating = info.penetratingTriangle;
 
         Vector3 p1 = plane.owner.CollisionPointToWorld(plane.triangle.v1);
         Vector3 p2 = plane.owner.CollisionPointToWorld(plane.triangle.v2);
         Vector3 p3 = plane.owner.CollisionPointToWorld(plane.triangle.v3);
 
         Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
-        Vector3 centerDirection = info.objectB.transform.position - info.objectA.transform.position;
 
-        if (Vector3.Dot(normal, centerDirection) < 0f)
+        Vector3 penetratingP1 = penetrating.owner.CollisionPointToWorld(penetrating.triangle.v1);
+        Vector3 penetratingP2 = penetrating.owner.CollisionPointToWorld(penetrating.triangle.v2);
+        Vector3 penetratingP3 = penetrating.owner.CollisionPointToWorld(penetrating.triangle.v3);
+        Vector3 penetratingCenter = (penetratingP1 + penetratingP2 + penetratingP3) / 3f;
+
+        /*
+         * La normal queda orientada desde el triángulo
+         * plano hacia el triángulo penetrante.
+         */
+        if (Vector3.Dot(normal, penetratingCenter - p1) < 0f)
             normal = -normal;
 
-        info.contactNormal = normal;
+        /*
+         * El resolver espera que contactNormal apunte
+         * desde objectA hacia objectB.
+         */
+        if (plane.owner == info.objectA)
+            info.contactNormal = normal;
+        else
+            info.contactNormal = -normal;
+
         info.penetration = Mathf.Abs(Vector3.Dot(info.penetratingVertex - info.contactPoint, normal));
     }
 }

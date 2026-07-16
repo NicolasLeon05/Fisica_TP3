@@ -34,6 +34,11 @@ public class CollisionDetector
         {
             candidates.Add(candidate);
         }
+
+        public void SortByScoreDescending()
+        {
+            candidates.Sort((a, b) => b.score.CompareTo(a.score));
+        }
     }
 
     private TriangleOctree staticOctree;
@@ -67,7 +72,7 @@ public class CollisionDetector
         results.Clear();
 
         foreach (CandidateBuffer buffer in candidateBuffers.Values)
-            buffer.Clear();
+            { buffer.Clear(); }
 
         for (int i = 0; i < dynamicObjects.Count; i++)
         {
@@ -205,8 +210,12 @@ public class CollisionDetector
             candidateBuffers.Add(objectPair, buffer);
         }
 
-        Vector3 centerDifference = triangleB.sphere.center - triangleA.sphere.center;
-        float combinedRadius = triangleA.sphere.radius + triangleB.sphere.radius;
+        Sphere sphereA = triangleA.currentSphere;
+        Sphere sphereB = triangleB.currentSphere;
+
+        Vector3 centerDifference = sphereB.center - sphereA.center;
+        float combinedRadius = sphereA.radius + sphereB.radius;
+
         float score = combinedRadius * combinedRadius - centerDifference.sqrMagnitude;
 
         buffer.Add(new CollisionCandidate(triangleA, triangleB, score));
@@ -221,28 +230,38 @@ public class CollisionDetector
             if (buffer.Count == 0)
                 continue;
 
+            buffer.SortByScoreDescending();
+
             CollisionInfo bestCollision = null;
             float earliestTime = float.PositiveInfinity;
 
             for (int i = 0; i < buffer.Count; i++)
             {
                 CollisionCandidate candidate = buffer[i];
+
                 CollisionInfo collision = BuildCollisionInfo(candidate.triangleA, candidate.triangleB);
 
                 bool involvesBall = collision.objectA is Ball || collision.objectB is Ball;
-                int temporalSteps = involvesBall ? ballTemporalSearchSteps : carTemporalSearchSteps;
+
+                int maximumTemporalSteps = involvesBall ? ballTemporalSearchSteps : carTemporalSearchSteps;
+                int temporalSteps = CalculateTemporalSteps(collision, maximumTemporalSteps);
 
                 if (!TriangleCollisionTester.TryFindFirstCollision(collision, temporalSteps, binarySearchIterations,
                     out float collisionTime, out _))
                     continue;
 
                 /*
-                 * Solamente conservamos el primer impacto.
-                 * No elegimos el contacto más penetrado.
+                 * Ya estaban en contacto al comienzo.
+                 * No existe un impacto anterior a t = 0.
                  */
-                bool isEarlier = bestCollision == null || collisionTime < earliestTime - 0.0001f;
+                if (collisionTime <= 0.0001f)
+                {
+                    bestCollision = collision;
+                    earliestTime = 0f;
+                    break;
+                }
 
-                if (!isEarlier)
+                if (collisionTime >= earliestTime)
                     continue;
 
                 bestCollision = collision;
@@ -255,6 +274,20 @@ public class CollisionDetector
             bestCollision.collisionTime = earliestTime;
             results.Add(bestCollision);
         }
+    }
+
+    private static int CalculateTemporalSteps(CollisionInfo collision, int maximumSteps)
+    {
+        Vector3 movementA = collision.currentStateA.Position - collision.previousStateA.Position;
+        Vector3 movementB = collision.currentStateB.Position - collision.previousStateB.Position;
+
+        float relativeMovement = (movementA - movementB).magnitude;
+
+        const float DISTANCE_PER_SAMPLE = 0.1f;
+
+        int steps = Mathf.CeilToInt(relativeMovement / DISTANCE_PER_SAMPLE);
+
+        return Mathf.Clamp(steps, 1, maximumSteps);
     }
 
     private CollisionInfo BuildCollisionInfo(TriangleReference triangleA, TriangleReference triangleB)
