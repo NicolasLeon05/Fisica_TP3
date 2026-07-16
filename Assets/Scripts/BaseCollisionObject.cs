@@ -17,6 +17,8 @@ public abstract class BaseCollisionObject : MonoBehaviour
 
     public abstract List<Triangle> Triangles { get; }
 
+    public abstract TriangleReference[] TriangleReferences { get; }
+
     public abstract Sphere GetTriangleSphere(Triangle triangle);
 
     public abstract Vector3 CenterOfMass { get; }

@@ -21,7 +21,37 @@ public class Car : BaseCollisionObject
     [Header("Jump")]
     [SerializeField] private float jumpImpulse = 5f;
 
-    private const float GRAVITY = 0;
+    [Header("Ground Support")]
+    [SerializeField] private Transform[] supportPoints;
+
+    [SerializeField] private Vector3 supportBoxHalfSize = new Vector3(0.25f, 0.1f, 0.35f);
+
+    [SerializeField] private float supportProbeStart = 0.15f;
+    [SerializeField] private float supportProbeLength = 0.6f;
+    [SerializeField] private int minimumSupportPoints = 2;
+
+    [SerializeField] private float groundAlignSpeed = 12f;
+    [SerializeField] private float maximumSupportCorrection = 0.3f;
+    [SerializeField] private float supportDetachVelocity = 0.75f;
+
+    private bool isGrounded;
+    private Vector3 groundNormal = Vector3.up;
+    private ScenarioPiece groundPiece;
+
+    public Transform[] SupportPoints => supportPoints;
+    public Vector3 SupportBoxHalfSize => supportBoxHalfSize;
+    public float SupportProbeStart => supportProbeStart;
+    public float SupportProbeLength => supportProbeLength;
+    public int MinimumSupportPoints => minimumSupportPoints;
+    public float GroundAlignSpeed => groundAlignSpeed;
+    public float MaximumSupportCorrection => maximumSupportCorrection;
+    public float SupportDetachVelocity => supportDetachVelocity;
+
+    public bool IsGrounded => isGrounded;
+    public Vector3 GroundNormal => groundNormal;
+    public ScenarioPiece GroundPiece => groundPiece;
+
+    private const float GRAVITY = 9.8f;
 
     private Vector3 linearVelocity;
     private Vector3 angularVelocity;
@@ -30,12 +60,15 @@ public class Car : BaseCollisionObject
     private float movementInput;
     private float rotationInput;
 
-    private bool isGrounded = true;
-    private Vector3 groundNormal = Vector3.up;
-
     private List<Triangle> triangles = new List<Triangle>();
     private TriangleReference[] triangleReferences;
-    public TriangleReference[] TriangleReferences => triangleReferences;
+    public override TriangleReference[] TriangleReferences
+    {
+        get
+        {
+            return triangleReferences;
+        }
+    }
     public override float Mass => mass;
     public override float Restitution => restitution;
     public AABB Bounds => new AABB(meshRenderer.bounds.center, meshRenderer.bounds.extents * 2);
@@ -144,7 +177,7 @@ public class Car : BaseCollisionObject
         {
             frictionForce = -Mathf.Sign(forwardSpeed) * frictionCoefficient * normalForce;
 
-            // Evitar que la fricción invierta la velocidad.
+            // Evitar que la friccion invierta la velocidad.
             float maximumStoppingForce = Mathf.Abs(forwardSpeed) * mass / dt;
 
             frictionForce = Mathf.Clamp(frictionForce, -maximumStoppingForce, maximumStoppingForce);
@@ -336,6 +369,19 @@ public class Car : BaseCollisionObject
     {
         isGrounded = true;
         groundNormal = normal.normalized;
+    }
+
+    public void SetGroundSupport(ScenarioPiece piece, Vector3 normal)
+    {
+        isGrounded = true;
+        groundPiece = piece;
+        groundNormal = normal.normalized;
+    }
+
+    public void ClearGroundSupport()
+    {
+        isGrounded = false;
+        groundPiece = null;
     }
 
     public override Vector3 ApplyInverseInertiaTensor(Vector3 worldVector)

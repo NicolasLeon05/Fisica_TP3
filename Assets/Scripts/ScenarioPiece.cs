@@ -23,7 +23,13 @@ public class ScenarioPiece : BaseCollisionObject
 
     public override BVHNode BVHRoot => bvhRoot;
     public override List<Triangle> Triangles => triangles;
-
+    public override TriangleReference[] TriangleReferences
+    {
+        get
+        {
+            return triangleReferences;
+        }
+    }
     public override Vector3 CenterOfMass => transform.position;
 
     public AABB Bounds => new AABB(meshRenderer.bounds.center, meshRenderer.bounds.size);

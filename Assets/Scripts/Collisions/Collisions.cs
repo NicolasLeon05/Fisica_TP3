@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public static class Collisions
@@ -35,67 +34,6 @@ public static class Collisions
         return (a.center - b.center).sqrMagnitude <= radiusSum * radiusSum;
     }
 
-    public static bool ObjectsCollideInsideNode(OctreeNode node)
-    {
-        for (int i = 0; i < node.objects.Count; i++)
-            for (int j = i + 1; j < node.objects.Count; j++)
-                if (VolumeVsVolume(node.objects[i].CollisionVolume, node.objects[j].CollisionVolume))
-                    return true;
-
-        return false;
-    }
-
-    public static void CheckObjectsOctreeNodes(List<BaseCollisionObject> objects, OctreeNode node)
-    {
-        foreach (BaseCollisionObject obj in objects)
-        {
-            if (VolumeVsAABB(obj.CollisionVolume, node.Bounds))
-                node.objects.Add(obj);
-        }
-    }
-
-    public static bool CheckMinTrianglesContained(OctreeNode node, int minTriangles)
-    {
-        int trianglesContained = 0;
-
-        foreach (BaseCollisionObject obj in node.objects)
-        {
-            if (obj.Triangles == null)
-                continue;
-
-            foreach (Triangle triangle in obj.Triangles)
-            {
-                if (trianglesContained >= minTriangles)
-                    return true;
-
-                Sphere sphere = obj.GetTriangleSphere(triangle);
-
-                if (SphereVsAABB(sphere, node.Bounds))
-                    trianglesContained++;
-            }
-        }
-
-        return false;
-    }
-
-    public static bool HasEnoughTrianglesInNode(OctreeNode octreeNode, int triangleLimit)
-    {
-        int triangleCount = 0;
-
-        foreach (BaseCollisionObject obj in octreeNode.objects)
-        {
-            if (obj.BVHRoot == null || obj.Triangles == null)
-                continue;
-
-            AABB localOctreeBounds = obj.InverseTransformAABB(octreeNode.Bounds);
-
-            if (CountTrianglesInBVH(obj.BVHRoot, obj, localOctreeBounds, triangleLimit, ref triangleCount))
-                return true;
-        }
-
-        return false;
-    }
-
     private static bool CountTrianglesInBVH(BVHNode bvhNode, BaseCollisionObject owner, AABB localOctreeBounds, int triangleLimit, ref int triangleCount)
     {
         if (bvhNode == null)
@@ -130,66 +68,6 @@ public static class Collisions
         }
 
         return false;
-    }
-
-    public static void CollectTrianglesForLeaf(OctreeNode octreeNode, int collisionStep)
-    {
-        foreach (BaseCollisionObject obj in octreeNode.objects)
-        {
-            if (obj.BVHRoot == null || obj.Triangles == null)
-                continue;
-
-            AABB localOctreeBounds = obj.InverseTransformAABB(octreeNode.Bounds);
-
-            CollectLeafTrianglesFromBVH(obj.BVHRoot, obj, localOctreeBounds, octreeNode, collisionStep);
-        }
-    }
-
-    private static void CollectLeafTrianglesFromBVH(BVHNode bvhNode, BaseCollisionObject owner, AABB localOctreeBounds, OctreeNode octreeNode, int collisionStep)
-    {
-        if (bvhNode == null)
-            return;
-
-        if (!AABBvsAABB(bvhNode.Bounds, localOctreeBounds))
-            return;
-
-        if (!bvhNode.IsLeaf)
-        {
-            CollectLeafTrianglesFromBVH(bvhNode.Left, owner, localOctreeBounds, octreeNode, collisionStep);
-            CollectLeafTrianglesFromBVH(bvhNode.Right, owner, localOctreeBounds, octreeNode, collisionStep);
-
-            return;
-        }
-
-        List<TriangleReference> list = null;
-
-        foreach (int triangleIndex in bvhNode.TriangleIndices)
-        {
-            Triangle triangle = owner.Triangles[triangleIndex];
-
-            // Filtro barato en espacio local.
-            if (!AABBvsAABB(triangle.localAABB, localOctreeBounds))
-                continue;
-
-            TriangleReference reference = owner.GetTriangleReference(triangleIndex, collisionStep);
-
-            // Mantener la esfera mínima como prueba final
-            // de pertenencia al nodo del octree.
-            if (!SphereVsAABB(reference.sphere, octreeNode.Bounds))
-                continue;
-
-            if (list == null)
-            {
-                if (!octreeNode.triangles.TryGetValue(owner, out list))
-                {
-                    list = new List<TriangleReference>();
-                    octreeNode.triangles.Add(owner, list);
-                }
-            }
-
-            // Se reutiliza siempre la misma referencia.
-            list.Add(reference);
-        }
     }
 
     public static bool VertexPlaneTest(TriangleReference planeTriangle, TriangleReference testTriangle,
@@ -356,6 +234,15 @@ public static class Collisions
         return false;
     }
 
+    public static bool AABBIntersectsAABB(AABB a, AABB b)
+    {
+        Vector3 difference = a.center - b.center;
+
+        return
+            Mathf.Abs(difference.x) <= a.halfSize.x + b.halfSize.x &&
+            Mathf.Abs(difference.y) <= a.halfSize.y + b.halfSize.y &&
+            Mathf.Abs(difference.z) <= a.halfSize.z + b.halfSize.z;
+    }
     public static Sphere GetMinimumTriangleSphere(Vector3 a, Vector3 b, Vector3 c)
     {
         float abSquared = (b - a).sqrMagnitude;

@@ -70,7 +70,7 @@ public sealed class TriangleOctree
             return;
         }
 
-        if (!AABBIntersectsAABB(reference.bounds, Root.Bounds))
+        if (!Collisions.AABBIntersectsAABB(reference.bounds, Root.Bounds))
         {
             RejectedOutsideRoot++;
             return;
@@ -174,16 +174,6 @@ public sealed class TriangleOctree
             Mathf.Abs(difference.z) + inner.halfSize.z <= outer.halfSize.z;
     }
 
-    private static bool AABBIntersectsAABB(AABB a, AABB b)
-    {
-        Vector3 difference = a.center - b.center;
-
-        return
-            Mathf.Abs(difference.x) <= a.halfSize.x + b.halfSize.x &&
-            Mathf.Abs(difference.y) <= a.halfSize.y + b.halfSize.y &&
-            Mathf.Abs(difference.z) <= a.halfSize.z + b.halfSize.z;
-    }
-
     public void Query(Sphere querySphere, List<TriangleReference> results)
     {
         if (results == null)
@@ -224,14 +214,14 @@ public sealed class TriangleOctree
         if (node == null)
             return;
 
-        if (!AABBIntersectsAABB(queryBounds, node.Bounds))
+        if (!Collisions.AABBIntersectsAABB(queryBounds, node.Bounds))
             return;
 
         for (int i = 0; i < node.Triangles.Count; i++)
         {
             TriangleReference reference = node.Triangles[i];
 
-            if (AABBIntersectsAABB(queryBounds, reference.bounds))
+            if (Collisions.AABBIntersectsAABB(queryBounds, reference.bounds))
                 results.Add(reference);
         }
 

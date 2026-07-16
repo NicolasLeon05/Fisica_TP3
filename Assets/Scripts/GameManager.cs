@@ -3,6 +3,59 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    private struct CollisionCandidate
+    {
+        public TriangleReference triangleA;
+        public TriangleReference triangleB;
+        public float score;
+
+        public CollisionCandidate(TriangleReference triangleA, TriangleReference triangleB, float score)
+        {
+            this.triangleA = triangleA;
+            this.triangleB = triangleB;
+            this.score = score;
+        }
+    }
+
+    private sealed class CandidateBuffer
+    {
+        private readonly CollisionCandidate[] candidates;
+
+        public int Count { get; private set; }
+
+        public CollisionCandidate this[int index] => candidates[index];
+
+        public CandidateBuffer(int capacity)
+        {
+            candidates = new CollisionCandidate[capacity];
+        }
+
+        public void Clear()
+        {
+            Count = 0;
+        }
+
+        public void AddOrdered(CollisionCandidate candidate)
+        {
+            int insertIndex = 0;
+
+            while (insertIndex < Count && candidates[insertIndex].score >= candidate.score)
+                insertIndex++;
+
+            if (insertIndex >= candidates.Length)
+                return;
+
+            int lastIndex = Mathf.Min(Count, candidates.Length - 1);
+
+            for (int i = lastIndex; i > insertIndex; i--)
+                candidates[i] = candidates[i - 1];
+
+            candidates[insertIndex] = candidate;
+
+            if (Count < candidates.Length)
+                Count++;
+        }
+    }
 
     [Header("Objects")]
     [SerializeField] private Car car1;
@@ -12,14 +65,14 @@ public class GameManager : MonoBehaviour
     [Header("Octree")]
     [SerializeField] private float parentSize;
     [SerializeField] private float minSize;
-    private OctreeNode parentNode;
+    //private OctreeNode parentNode;
     private List<BaseCollisionObject> objects = new();
 
     [Header("Constraints")]
     [SerializeField] private int minObjectsToDivide = 2;
     [SerializeField] private int minTrianglesToDivide = 64;
     [SerializeField] private int maxOctreeDepth = 10;
-    [SerializeField] private int binarySearchLimit = 12;
+    [SerializeField] private int binarySearchLimit = 6;
 
     [Header("Static Octree")]
     [SerializeField] private float staticMinNodeSize = 4f;
@@ -31,32 +84,23 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int dynamicMaxDepth = 5;
     [SerializeField] private int dynamicTrianglesPerNode = 256;
 
+    [Header("Collision candidates")]
+    [SerializeField] private int maxPreciseCandidatesPerPair = 12;
+    private readonly Dictionary<ObjectPairKey, CandidateBuffer> candidateBuffers = new();
+    private readonly List<TriangleReference> octreeQueryResults = new(256);
+    private readonly List<TriangleReference> staticObjectCandidates = new(1024);
+    private readonly List<TriangleReference> supportQueryResults = new(128);
+    private readonly List<TriangleReference> dynamicPairQueryResults = new(2048);
+    private readonly List<TriangleReference> dynamicPairTrianglesA = new(1024);
+    private readonly List<TriangleReference> dynamicPairTrianglesB = new(1024);
+
     private TriangleOctree staticOctree;
     private TriangleOctree dynamicOctree;
     private readonly List<TriangleReference> dynamicTriangles = new();
 
-    private List<OctreeNode> octreeNodes = new List<OctreeNode>();
     private readonly List<CollisionInfo> collisions = new List<CollisionInfo>();
 
-    //////////////////////////////////////////////////// DEBUG ///////////////////////////////////////////////////////////////////////////
-    private long sphereTestCount;
-    private int sphereHitCount;
-    private long spherePairAttemptCount;
-    private long duplicatePairCount;
-    private long countTrianglesTicks;
-    private long collectTrianglesTicks;
-    private long sphereCandidatesTicks;
     private int collisionStep;
-    private int scenarioContactCount;
-    private long preciseCollisionTicks;
-    private long preciseCollisionTestCount;
-
-    private double TicksToMilliseconds(long ticks)
-    {
-        return ticks * 1000.0 /
-            System.Diagnostics.Stopwatch.Frequency;
-    }
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     private readonly HashSet<TrianglePairKey> testedTrianglePairs = new();
     private readonly Dictionary<ObjectPairKey, int> contactsPerPair = new();
@@ -64,7 +108,7 @@ public class GameManager : MonoBehaviour
 
     private void Awake()
     {
-        parentNode = new OctreeNode(transform.position, parentSize, null);
+        //parentNode = new OctreeNode(transform.position, parentSize, null);
         objects.Add(car1);
         objects.Add(car2);
 
@@ -72,7 +116,7 @@ public class GameManager : MonoBehaviour
             if (piece != null)
                 objects.Add(piece);
 
-        parentNode.SetPosition(transform.position);
+        //parentNode.SetPosition(transform.position);
 
         staticOctree = new TriangleOctree(transform.position, parentSize, staticMinNodeSize, staticMaxDepth, staticTrianglesPerNode);
         dynamicOctree = new TriangleOctree(transform.position, parentSize, dynamicMinNodeSize, dynamicMaxDepth, dynamicTrianglesPerNode);
@@ -150,70 +194,137 @@ public class GameManager : MonoBehaviour
 
         collisionStep++;
 
-        RebuildDynamicOctree(out double sphereUpdateMilliseconds, out double octreeBuildMilliseconds);
+        MaintainGroundSupport(car1);
+        MaintainGroundSupport(car2);
 
-        Debug.Log(
-        $"Octree dinámico | " +
-        $"Triángulos: {dynamicTriangles.Count} | " +
-        $"Referencias totales: {dynamicOctree.StoredReferenceCount} | " +
-        $"Referencias en root: {dynamicOctree.RootReferenceCount} | " +
-        $"Nodos: {dynamicOctree.NodeCount} | " +
-        $"Actualizar: {sphereUpdateMilliseconds:F2} ms | " +
-        $"Construir: {octreeBuildMilliseconds:F2} ms | " +
-        $"Fuera: {dynamicOctree.RejectedOutsideRoot} | " +
-        $"Inválidos: {dynamicOctree.RejectedInvalidBounds}");
+        RebuildDynamicOctree(out _, out _);
 
-        //car1.SimulatePhysicsStep();
-        //car2.SimulatePhysicsStep();
-        //
-        //car1.BeginContactDetection();
-        //car2.BeginContactDetection();
-        //
-        //collisionStep++;
-        //
-        //collisions.Clear();
-        //testedTrianglePairs.Clear();
-        //contactsPerPair.Clear();
-        //
-        //sphereTestCount = 0;
-        //sphereHitCount = 0;
-        //spherePairAttemptCount = 0;
-        //duplicatePairCount = 0;
-        //countTrianglesTicks = 0;
-        //collectTrianglesTicks = 0;
-        //sphereCandidatesTicks = 0;
-        //scenarioContactCount = 0;
-        //preciseCollisionTicks = 0;
-        //preciseCollisionTestCount = 0;
-        //
-        //parentNode.Clear();
-        //octreeNodes.Clear();
-        //
-        //var stopwatch =
-        //    System.Diagnostics.Stopwatch.StartNew();
-        //UpdateOctree(parentNode);
-        //stopwatch.Stop();
-        //
-        ////if (Time.frameCount % 60 == 0)
-        //{
-        //    Debug.Log(
-        //    $"Total: {stopwatch.Elapsed.TotalMilliseconds:F2} ms | " +
-        //    $"Conteo BVH: {TicksToMilliseconds(countTrianglesTicks):F2} ms | " +
-        //    $"Recolectar: {TicksToMilliseconds(collectTrianglesTicks):F2} ms | " +
-        //    $"Esferas: {TicksToMilliseconds(sphereCandidatesTicks):F2} ms | " +
-        //    $"Nodos: {octreeNodes.Count} | " +
-        //    $"Tests: {sphereTestCount} | " +
-        //    $"Hits: {sphereHitCount} | " +
-        //    $"Contactos escenario: {scenarioContactCount}" +
-        //    $"Precisas: {preciseCollisionTestCount} | " +
-        //    $"Tiempo preciso: {TicksToMilliseconds(preciseCollisionTicks):F2} ms | ");
-        //}
-        //
-        //foreach (CollisionInfo collision in collisions)
-        //    ResolveCollision(collision);
-        //
-        //collisions.Clear();
-        //ClearNodeTriangles();
+        DetectCollisions();
+        ResolveDetectedCollisions();
+    }
+
+    private void DetectCollisions()
+    {
+        collisions.Clear();
+        contactsPerPair.Clear();
+
+        foreach (CandidateBuffer buffer in candidateBuffers.Values)
+            buffer.Clear();
+
+        DetectDynamicDynamicCollisions(car1, car2);
+        DetectDynamicStaticCollisions(car1);
+        DetectDynamicStaticCollisions(car2);
+
+        BuildCollisionsFromCandidates();
+    }
+
+    private void DetectDynamicDynamicCollisions(BaseCollisionObject objectA, BaseCollisionObject objectB)
+    {
+        AABB objectBoundsA = GetObjectBounds(objectA);
+        AABB objectBoundsB = GetObjectBounds(objectB);
+
+        if (!Collisions.AABBIntersectsAABB(objectBoundsA, objectBoundsB))
+            return;
+        /*
+         * Consultamos solamente la región espacial
+         * compartida por los dos autos.
+         */
+        AABB intersectionBounds = GetIntersectionBounds(objectBoundsA, objectBoundsB);
+
+        dynamicPairQueryResults.Clear();
+        dynamicOctree.Query(intersectionBounds, dynamicPairQueryResults);
+        dynamicPairTrianglesA.Clear();
+        dynamicPairTrianglesB.Clear();
+
+        for (int i = 0; i < dynamicPairQueryResults.Count; i++)
+        {
+            TriangleReference triangle = dynamicPairQueryResults[i];
+
+            if (triangle.owner == objectA)
+                dynamicPairTrianglesA.Add(triangle);
+            else if (triangle.owner == objectB)
+                dynamicPairTrianglesB.Add(triangle);
+        }
+
+        if (dynamicPairTrianglesA.Count == 0 || dynamicPairTrianglesB.Count == 0)
+            return;
+
+        /*
+         * Ordenamos ambos conjuntos según el comienzo
+         * de su AABB en el eje X.
+         */
+        dynamicPairTrianglesA.Sort(CompareTriangleByMinX);
+        dynamicPairTrianglesB.Sort(CompareTriangleByMinX);
+
+        int firstPossibleB = 0;
+
+        for (int i = 0; i < dynamicPairTrianglesA.Count; i++)
+        {
+            TriangleReference triangleA = dynamicPairTrianglesA[i];
+
+            /*
+             * Descartamos definitivamente todos los
+             * triángulos B que quedaron a la izquierda
+             * del triángulo A.
+             */
+            while (firstPossibleB < dynamicPairTrianglesB.Count &&
+                dynamicPairTrianglesB[firstPossibleB].bounds.Max.x < triangleA.bounds.Min.x)
+            {
+                firstPossibleB++;
+            }
+
+            for (int j = firstPossibleB; j < dynamicPairTrianglesB.Count; j++)
+            {
+                TriangleReference triangleB = dynamicPairTrianglesB[j];
+
+                /*
+                 * Como B está ordenado por Min.x,
+                 * los siguientes tampoco podrán tocar A.
+                 */
+                if (triangleB.bounds.Min.x > triangleA.bounds.Max.x)
+                    break;
+
+                if (!Collisions.AABBIntersectsAABB(triangleA.bounds, triangleB.bounds))
+                    continue;
+
+                if (!Collisions.SphereVsSphere(triangleA.sphere, triangleB.sphere))
+                    continue;
+
+                AddCollisionCandidate(triangleA, triangleB);
+            }
+        }
+    }
+
+    private void DetectDynamicStaticCollisions(BaseCollisionObject dynamicObject)
+    {
+
+        AABB objectBounds = GetObjectBounds(dynamicObject);
+
+        staticObjectCandidates.Clear();
+        staticOctree.Query(objectBounds, staticObjectCandidates);
+
+        TriangleReference[] dynamicReferences = dynamicObject.TriangleReferences;
+
+        for (int i = 0; i < dynamicReferences.Length; i++)
+        {
+            TriangleReference dynamicTriangle = dynamicReferences[i];
+
+            for (int j = 0; j < staticObjectCandidates.Count; j++)
+            {
+                TriangleReference staticTriangle = staticObjectCandidates[j];
+
+                if (dynamicObject is Car car && car.IsGrounded && staticTriangle.owner == car.GroundPiece)
+                    continue;
+
+                if (!Collisions.AABBIntersectsAABB(dynamicTriangle.bounds, staticTriangle.bounds))
+                    continue;
+
+                if (!Collisions.SphereVsSphere(dynamicTriangle.sphere, staticTriangle.sphere))
+                    continue;
+
+                AddCollisionCandidate(dynamicTriangle, staticTriangle);
+            }
+        }
     }
 
     private void BuildStaticOctree()
@@ -248,13 +359,73 @@ public class GameManager : MonoBehaviour
             $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms");
     }
 
-    private void AddDynamicObjectTriangles(BaseCollisionObject collisionObject)
+    private void AddCollisionCandidate(TriangleReference triangleA, TriangleReference triangleB)
     {
-        for (int i = 0; i < collisionObject.Triangles.Count; i++)
+        if (triangleA.owner == triangleB.owner)
+            return;
+
+        if (triangleA.owner.Mass <= 0f && triangleB.owner.Mass <= 0f)
+            return;
+
+        ObjectPairKey objectPair = new ObjectPairKey(triangleA.owner, triangleB.owner);
+
+        if (!candidateBuffers.TryGetValue(objectPair, out CandidateBuffer buffer))
         {
-            TriangleReference reference = collisionObject.GetTriangleReference(i, collisionStep);
-            dynamicTriangles.Add(reference);
+            buffer = new CandidateBuffer(maxPreciseCandidatesPerPair);
+            candidateBuffers.Add(objectPair, buffer);
         }
+
+        Vector3 centerDifference = triangleB.sphere.center - triangleA.sphere.center;
+        float combinedRadius = triangleA.sphere.radius + triangleB.sphere.radius;
+        float score = combinedRadius * combinedRadius - centerDifference.sqrMagnitude;
+
+        buffer.AddOrdered(new CollisionCandidate(triangleA, triangleB, score));
+    }
+
+    private void BuildCollisionsFromCandidates()
+    {
+        foreach (KeyValuePair<ObjectPairKey, CandidateBuffer> entry in candidateBuffers)
+        {
+            CandidateBuffer buffer = entry.Value;
+
+            if (buffer.Count == 0)
+                continue;
+
+            int contactCount = 0;
+
+            for (int i = 0; i < buffer.Count; i++)
+            {
+                CollisionCandidate candidate = buffer[i];
+                CollisionInfo collision = BuildCollisionInfo(candidate.triangleA, candidate.triangleB);
+
+                if (!CheckCollision(collision))
+                    continue;
+
+                collisions.Add(collision);
+                contactCount++;
+                contactsPerPair[entry.Key] = contactCount;
+
+                if (contactCount >= maxContactsPerPair)
+                    break;
+            }
+        }
+    }
+
+    private void ResolveDetectedCollisions()
+    {
+        for (int i = 0; i < collisions.Count; i++)
+        {
+            CollisionInfo collision = collisions[i];
+
+            collision.previousStateA = collision.objectA.PreviousState;
+            collision.currentStateA = collision.objectA.CurrentState;
+            collision.previousStateB = collision.objectB.PreviousState;
+            collision.currentStateB = collision.objectB.CurrentState;
+
+            ResolveCollision(collision);
+        }
+
+        collisions.Clear();
     }
 
     private void RebuildDynamicOctree(out double sphereUpdateMilliseconds, out double octreeBuildMilliseconds)
@@ -272,8 +443,8 @@ public class GameManager : MonoBehaviour
 
         if (collisionStep == 1)
         {
-            TriangleReference car1Reference =                car1.TriangleReferences[0];
-            TriangleReference car2Reference =                car2.TriangleReferences[0];
+            TriangleReference car1Reference = car1.TriangleReferences[0];
+            TriangleReference car2Reference = car2.TriangleReferences[0];
 
             Debug.Log(
                 $"{car1.name} primer triángulo | " +
@@ -323,10 +494,7 @@ public class GameManager : MonoBehaviour
         }
 
         CalculateContactData(info);
-        RegisterGroundContact(info);
-
         ResolveImpulse(info, ref impactStateA, ref impactStateB);
-
         ApplyContactSeparation(info, ref impactStateA, ref impactStateB);
 
         PhysicsState finalStateA = impactStateA;
@@ -366,53 +534,31 @@ public class GameManager : MonoBehaviour
     private void ResolveImpulse(CollisionInfo info, ref PhysicsState stateA, ref PhysicsState stateB)
     {
         Vector3 normal = info.contactNormal.normalized;
-
-        Vector3 centerOfMassA = info.objectA.CenterOfMass;
-        Vector3 centerOfMassB = info.objectB.CenterOfMass;
-
-        Vector3 contactArmA = info.contactPoint - centerOfMassA;
-        Vector3 contactArmB = info.contactPoint - centerOfMassB;
-
-        Vector3 contactVelocityA = stateA.LinearVelocity + Vector3.Cross(stateA.AngularVelocity, contactArmA);
-        Vector3 contactVelocityB = stateB.LinearVelocity + Vector3.Cross(stateB.AngularVelocity, contactArmB);
-        Vector3 relativeVelocity = contactVelocityB - contactVelocityA;
+        Vector3 relativeVelocity = stateB.LinearVelocity - stateA.LinearVelocity;
         float velocityAlongNormal = Vector3.Dot(relativeVelocity, normal);
 
-        // Los objetos ya se están separando.
         if (velocityAlongNormal >= 0f)
             return;
 
         float inverseMassA = info.objectA.Mass > 0f ? 1f / info.objectA.Mass : 0f;
         float inverseMassB = info.objectB.Mass > 0f ? 1f / info.objectB.Mass : 0f;
 
-        Vector3 angularTermA = info.objectA.ApplyInverseInertiaTensor(Vector3.Cross(contactArmA, normal));
-        Vector3 angularTermB = info.objectB.ApplyInverseInertiaTensor(Vector3.Cross(contactArmB, normal));
-
-        float angularDenominatorA = Vector3.Dot(normal, Vector3.Cross(angularTermA, contactArmA));
-        float angularDenominatorB = Vector3.Dot(normal, Vector3.Cross(angularTermB, contactArmB));
-        float denominator = inverseMassA + inverseMassB + angularDenominatorA + angularDenominatorB;
+        float denominator = inverseMassA + inverseMassB;
 
         if (denominator <= Mathf.Epsilon)
             return;
 
         float restitution = Mathf.Min(info.objectA.Restitution, info.objectB.Restitution);
         const float RESTING_VELOCITY_THRESHOLD = 1f;
+
         if (Mathf.Abs(velocityAlongNormal) < RESTING_VELOCITY_THRESHOLD)
             restitution = 0f;
 
         float impulseMagnitude = -(1f + restitution) * velocityAlongNormal / denominator;
         Vector3 impulse = impulseMagnitude * normal;
 
-        // Velocidad lineal.
         stateA.LinearVelocity -= impulse * inverseMassA;
         stateB.LinearVelocity += impulse * inverseMassB;
-
-        // Velocidad angular.
-        Vector3 angularImpulseA = Vector3.Cross(contactArmA, impulse);
-        Vector3 angularImpulseB = Vector3.Cross(contactArmB, impulse);
-
-        stateA.AngularVelocity -= info.objectA.ApplyInverseInertiaTensor(angularImpulseA);
-        stateB.AngularVelocity += info.objectB.ApplyInverseInertiaTensor(angularImpulseB);
     }
 
     private void AdvanceRemainingTime(ref PhysicsState state, float collisionTime)
@@ -551,154 +697,188 @@ public class GameManager : MonoBehaviour
         info.penetration = Mathf.Abs(Vector3.Dot(info.penetratingVertex - info.contactPoint, normal));
     }
 
-    private void RegisterGroundContact(CollisionInfo info)
+    private static int CompareTriangleByMinX(TriangleReference a, TriangleReference b)
     {
-        if (info.objectA is Car carA && info.objectB is ScenarioPiece)
-        {
-            Vector3 supportNormal = -info.contactNormal;
-            if (Vector3.Dot(supportNormal, carA.transform.up) > 0.25f)
-                carA.SetGroundContact(supportNormal);
-        }
-
-        if (info.objectB is Car carB && info.objectA is ScenarioPiece)
-        {
-            Vector3 supportNormal = info.contactNormal;
-
-            if (Vector3.Dot(supportNormal, carB.transform.up) > 0.25f)
-                carB.SetGroundContact(supportNormal);
-        }
+        return a.bounds.Min.x.CompareTo(b.bounds.Min.x);
     }
 
-    private void ClearNodeTriangles()
+    private static AABB GetIntersectionBounds(AABB a, AABB b)
     {
-        foreach (OctreeNode node in octreeNodes)
-            node.triangles.Clear();
+        Vector3 minimum = Vector3.Max(a.Min, b.Min);
+        Vector3 maximum = Vector3.Min(a.Max, b.Max);
+
+        return new AABB((minimum + maximum) * 0.5f, maximum - minimum);
     }
 
-    private void ProcessSphereCandidates(OctreeNode node)
+    private AABB GetObjectBounds(BaseCollisionObject collisionObject)
     {
-        for (int i = 0; i < node.objects.Count; i++)
-        {
-            BaseCollisionObject ownerA = node.objects[i];
+        AABBVolume volume = collisionObject.CollisionVolume as AABBVolume;
 
-            if (!node.triangles.TryGetValue(ownerA, out List<TriangleReference> listA))
+        if (volume == null)
+        {
+            Debug.LogError($"{collisionObject.name} no tiene un AABBVolume.");
+            return new AABB(collisionObject.transform.position, Vector3.zero);
+        }
+
+        return volume.Bounds;
+    }
+
+    private static AABB BuildSupportQueryBounds(Vector3 start, Vector3 end, Vector3 halfSize)
+    {
+        Vector3 minimum = Vector3.Min(start, end) - halfSize;
+        Vector3 maximum = Vector3.Max(start, end) + halfSize;
+
+        return new AABB((minimum + maximum) * 0.5f, maximum - minimum);
+    }
+
+    private static Vector3 GetTriangleNormal(TriangleReference triangle, Vector3 towardPoint)
+    {
+        Vector3 p1 = triangle.owner.CollisionPointToWorld(triangle.triangle.v1);
+        Vector3 p2 = triangle.owner.CollisionPointToWorld(triangle.triangle.v2);
+        Vector3 p3 = triangle.owner.CollisionPointToWorld(triangle.triangle.v3);
+
+        Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
+        Vector3 towardDirection = towardPoint - p1;
+
+        if (Vector3.Dot(normal, towardDirection) < 0f)
+            normal = -normal;
+
+        return normal;
+    }
+
+    private bool TryFindWheelSupport(Car car, Transform supportPoint, Vector3 carUp,
+        out Vector3 hitPoint, out Vector3 hitNormal, out float hitDistance, out ScenarioPiece hitPiece)
+    {
+        hitPoint = Vector3.zero;
+        hitNormal = Vector3.zero;
+        hitDistance = float.MaxValue;
+        hitPiece = null;
+
+        Vector3 origin = supportPoint.position + carUp * car.SupportProbeStart;
+        Vector3 direction = -carUp;
+        float maximumDistance = car.SupportProbeStart + car.SupportProbeLength;
+        Vector3 end = origin + direction * maximumDistance;
+
+        AABB queryBounds = BuildSupportQueryBounds(origin, end, car.SupportBoxHalfSize);
+
+        supportQueryResults.Clear();
+        staticOctree.Query(queryBounds, supportQueryResults);
+
+        bool foundSupport = false;
+
+        for (int i = 0; i < supportQueryResults.Count; i++)
+        {
+            TriangleReference triangle =
+                supportQueryResults[i];
+
+            if (!Collisions.RayVsTriangle(origin, direction, maximumDistance, triangle, out Vector3 currentHitPoint))
                 continue;
 
-            for (int j = i + 1; j < node.objects.Count; j++)
-            {
-                BaseCollisionObject ownerB = node.objects[j];
+            float currentDistance = Vector3.Distance(origin, currentHitPoint);
 
-                if (ownerA.Mass <= 0f && ownerB.Mass <= 0f)
-                    continue;
+            if (currentDistance >= hitDistance)
+                continue;
 
-                if (!node.triangles.TryGetValue(ownerB, out List<TriangleReference> listB))
-                    continue;
+            Vector3 currentNormal = GetTriangleNormal(triangle, origin);
 
-                ObjectPairKey objectPair = new ObjectPairKey(ownerA, ownerB);
-                contactsPerPair.TryGetValue(objectPair, out int contactCount);
+            if (Vector3.Dot(currentNormal, carUp) <= 0.05f)
+                continue;
 
-                if (contactCount >= maxContactsPerPair)
-                    continue;
+            hitPoint = currentHitPoint;
+            hitNormal = currentNormal;
+            hitDistance = currentDistance;
+            hitPiece = triangle.owner as ScenarioPiece;
 
-                foreach (TriangleReference triangleA in listA)
-                {
-                    foreach (TriangleReference triangleB in listB)
-                    {
-                        if (contactCount >= maxContactsPerPair)
-                            break;
-
-                        spherePairAttemptCount++;
-                        sphereTestCount++;
-
-                        if (!Collisions.SphereVsSphere(triangleA.sphere, triangleB.sphere))
-                            continue;
-
-                        sphereHitCount++;
-
-                        TrianglePairKey trianglePair = new TrianglePairKey(triangleA, triangleB);
-
-                        if (!testedTrianglePairs.Add(trianglePair))
-                        {
-                            duplicatePairCount++;
-                            continue;
-                        }
-
-                        CollisionInfo collision = BuildCollisionInfo(triangleA, triangleB);
-
-                        long preciseStart = System.Diagnostics.Stopwatch.GetTimestamp();
-                        preciseCollisionTestCount++;
-
-                        bool collided = CheckCollision(collision);
-                        preciseCollisionTicks += System.Diagnostics.Stopwatch.GetTimestamp() - preciseStart;
-
-                        if (!collided)
-                            continue;
-
-                        collisions.Add(collision);
-
-                        contactCount++;
-                        contactsPerPair[objectPair] = contactCount;
-
-                        if (ownerA is ScenarioPiece || ownerB is ScenarioPiece)
-                            scenarioContactCount++;
-                    }
-
-                    if (contactCount >= maxContactsPerPair)
-                        break;
-                }
-            }
+            foundSupport = true;
         }
+
+        return foundSupport;
     }
 
-    private void UpdateOctree(OctreeNode node)
+    private void MaintainGroundSupport(Car car)
     {
-        if (node == null)
-            return;
+        Transform[] supportPoints = car.SupportPoints;
 
-        octreeNodes.Add(node);
-
-        node.objects.Clear();
-        node.triangles.Clear();
-
-        List<BaseCollisionObject> objectsToCheck = node.Parent == null ? objects : node.Parent.objects;
-        Collisions.CheckObjectsOctreeNodes(objectsToCheck, node);
-
-        if (node.objects.Count < minObjectsToDivide)
-            return;
-
-        if (!Collisions.ObjectsCollideInsideNode(node))
-            return;
-
-        bool canSubdivide = node.Size / 2f >= minSize && node.Depth < maxOctreeDepth;
-        bool shouldSubdivide = false;
-
-        if (canSubdivide)
+        if (supportPoints == null || supportPoints.Length == 0)
         {
-            long startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-            shouldSubdivide = Collisions.HasEnoughTrianglesInNode(node, minTrianglesToDivide);
-            countTrianglesTicks += System.Diagnostics.Stopwatch.GetTimestamp() - startTicks;
-        }
-
-        if (shouldSubdivide)
-        {
-            node.GenerateChildren();
-
-            foreach (OctreeNode child in node.Children)
-                UpdateOctree(child);
-
+            car.ClearGroundSupport();
             return;
         }
 
-        long collectStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        Collisions.CollectTrianglesForLeaf(node, collisionStep);
-        collectTrianglesTicks += System.Diagnostics.Stopwatch.GetTimestamp() - collectStart;
+        Vector3 carUp = car.IsGrounded ? car.GroundNormal : car.transform.up;
+        Vector3 normalSum = Vector3.zero;
+        Vector3 correctionSum = Vector3.zero;
 
-        if (node.triangles.Count < 2)
+        int supportCount = 0;
+
+        ScenarioPiece closestPiece = null;
+        float closestDistance = float.MaxValue;
+
+        for (int i = 0; i < supportPoints.Length; i++)
+        {
+            Transform supportPoint = supportPoints[i];
+
+            if (supportPoint == null)
+                continue;
+
+            if (!TryFindWheelSupport(car, supportPoint, carUp,
+                out Vector3 hitPoint, out Vector3 hitNormal, out float hitDistance, out ScenarioPiece hitPiece))
+                continue;
+
+            float desiredDistance = car.SupportProbeStart;
+
+            float correction = desiredDistance - hitDistance;
+            correction = Mathf.Clamp(correction, -car.SupportProbeLength, car.MaximumSupportCorrection);
+
+            normalSum += hitNormal;
+            correctionSum += hitNormal * correction;
+
+            supportCount++;
+
+            if (hitDistance < closestDistance)
+            {
+                closestDistance = hitDistance;
+                closestPiece = hitPiece;
+            }
+        }
+
+        if (supportCount < car.MinimumSupportPoints)
+        {
+            car.ClearGroundSupport();
             return;
+        }
 
-        long sphereStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        ProcessSphereCandidates(node);
-        sphereCandidatesTicks += System.Diagnostics.Stopwatch.GetTimestamp() - sphereStart;
+        Vector3 averageNormal = normalSum.normalized;
+        PhysicsState state = car.CurrentState;
+        float velocityAwayFromGround = Vector3.Dot(state.LinearVelocity, averageNormal);
+
+        if (velocityAwayFromGround > car.SupportDetachVelocity)
+        {
+            car.ClearGroundSupport();
+            return;
+        }
+
+        Vector3 correctionVector = correctionSum / supportCount;
+        correctionVector = Vector3.ClampMagnitude(correctionVector, car.MaximumSupportCorrection);
+
+        state.Position += correctionVector;
+
+        float velocityIntoGround = Vector3.Dot(state.LinearVelocity, averageNormal);
+
+        if (velocityIntoGround < 0f)
+            state.LinearVelocity -= averageNormal * velocityIntoGround;
+
+        Vector3 currentUp = state.Rotation * Vector3.up;
+        //conserva la direccion horizontal general del auto
+        Quaternion targetRotation = Quaternion.FromToRotation(currentUp, averageNormal) * state.Rotation;
+
+        float alignmentFactor = 1f - Mathf.Exp(-car.GroundAlignSpeed * Time.fixedDeltaTime);
+
+        state.Rotation = Quaternion.Slerp(state.Rotation, targetRotation, alignmentFactor);
+        state.AngularVelocity = Vector3.Project(state.AngularVelocity, averageNormal);
+
+        car.SetSimulationStates(car.PreviousState, state);
+        car.SetGroundSupport(closestPiece, averageNormal);
     }
 
     private CollisionInfo BuildCollisionInfo(TriangleReference triangleA, TriangleReference triangleB)
@@ -728,11 +908,6 @@ public class GameManager : MonoBehaviour
         obj.SetSimulationStates(state, state);
     }
 
-    //private void OnDrawGizmos()
-    //{
-    //    if (parentNode != null)
-    //        parentNode.Draw();
-    //}
 
     private void OnDrawGizmos()
     {
