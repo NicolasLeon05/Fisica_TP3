@@ -72,7 +72,7 @@ public class CollisionDetector
         results.Clear();
 
         foreach (CandidateBuffer buffer in candidateBuffers.Values)
-            { buffer.Clear(); }
+        { buffer.Clear(); }
 
         for (int i = 0; i < dynamicObjects.Count; i++)
         {
@@ -116,10 +116,6 @@ public class CollisionDetector
         if (dynamicPairTrianglesA.Count == 0 || dynamicPairTrianglesB.Count == 0)
             return;
 
-        /*
-         * Ordenamos ambos conjuntos según el comienzo
-         * de su AABB en el eje X.
-         */
         dynamicPairTrianglesA.Sort(CompareTriangleByMinX);
         dynamicPairTrianglesB.Sort(CompareTriangleByMinX);
 
@@ -134,8 +130,7 @@ public class CollisionDetector
              * triángulos B que quedaron a la izquierda
              * del triángulo A.
              */
-            while (firstPossibleB < dynamicPairTrianglesB.Count &&
-                dynamicPairTrianglesB[firstPossibleB].bounds.Max.x < triangleA.bounds.Min.x)
+            while (firstPossibleB < dynamicPairTrianglesB.Count && dynamicPairTrianglesB[firstPossibleB].bounds.Max.x < triangleA.bounds.Min.x)
             {
                 firstPossibleB++;
             }

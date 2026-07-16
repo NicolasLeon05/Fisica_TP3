@@ -69,64 +69,6 @@ public class CollisionResolver
         CommitFinalState(info.objectB, finalStateB);
     }
 
-    private static void OrientContactNormal(CollisionInfo info, PhysicsState stateA, PhysicsState stateB)
-    {
-        Vector3 normal = info.contactNormal.normalized;
-        Vector3 relativeVelocity = stateB.LinearVelocity - stateA.LinearVelocity;
-
-        /*
-         * Para un impacto encontrado durante el paso,
-         * la velocidad relativa debe entrar en la normal.
-         */
-        if (info.collisionTime > 0.0001f && Vector3.Dot(relativeVelocity, normal) > 0f)
-            normal = -normal;
-
-        info.contactNormal = normal;
-    }
-
-    private float FindCollisionTime(CollisionInfo info, int iterations)
-    {
-        PhysicsState previousStateA = info.previousStateA;
-        PhysicsState previousStateB = info.previousStateB;
-
-        info.objectA.ApplyTemporaryState(previousStateA);
-        info.objectB.ApplyTemporaryState(previousStateB);
-
-        // Ya estaban penetrados al comienzo del paso.
-        if (TriangleCollisionTester.CheckCollision(info))
-            return 0f;
-
-        PhysicsState currentStateA = info.currentStateA;
-        PhysicsState currentStateB = info.currentStateB;
-
-        info.objectA.ApplyTemporaryState(currentStateA);
-        info.objectB.ApplyTemporaryState(currentStateB);
-
-        if (!TriangleCollisionTester.CheckCollision(info))
-            return 1f;
-
-        float left = 0f;
-        float right = 1f;
-
-        for (int i = 0; i < iterations; i++)
-        {
-            float mid = (left + right) * 0.5f;
-
-            PhysicsState stateA = info.objectA.GetInterpolatedState(previousStateA, currentStateA, mid);
-            PhysicsState stateB = info.objectB.GetInterpolatedState(previousStateB, currentStateB, mid);
-
-            info.objectA.ApplyTemporaryState(stateA);
-            info.objectB.ApplyTemporaryState(stateB);
-
-            if (TriangleCollisionTester.CheckCollision(info))
-                right = mid;
-            else
-                left = mid;
-        }
-
-        return right;
-    }
-
     private void ResolveImpulse(CollisionInfo info, ref PhysicsState stateA, ref PhysicsState stateB)
     {
         Vector3 normal = info.contactNormal;
