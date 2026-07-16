@@ -5,6 +5,8 @@ public class CollisionResolver
 {
     public void ResolveAll(List<CollisionInfo> collisions)
     {
+        collisions.Sort(CompareCollisionTime);
+
         for (int i = 0; i < collisions.Count; i++)
         {
             CollisionInfo collision = collisions[i];
@@ -21,6 +23,11 @@ public class CollisionResolver
         collisions.Clear();
     }
 
+    private static int CompareCollisionTime(CollisionInfo a, CollisionInfo b)
+    {
+        return a.collisionTime.CompareTo(b.collisionTime);
+    }
+
     private void ResolveCollision(CollisionInfo info)
     {
         float collisionTime = Mathf.Clamp01(info.collisionTime);
@@ -33,11 +40,17 @@ public class CollisionResolver
 
         if (!TriangleCollisionTester.TryBuildContact(info))
         {
-            info.objectA.ApplyTemporaryState(info.currentStateA);
-            info.objectB.ApplyTemporaryState(info.currentStateB);
-
+            CommitFinalState(info.objectA, info.currentStateA);
+            CommitFinalState(info.objectB, info.currentStateB);
             return;
         }
+
+        OrientContactNormal(info, impactStateA, impactStateB);
+
+        ResolveImpulse(
+            info,
+            ref impactStateA,
+            ref impactStateB);
 
         ResolveImpulse(info, ref impactStateA, ref impactStateB);
         ApplyContactSeparation(info, ref impactStateA, ref impactStateB);
@@ -45,9 +58,8 @@ public class CollisionResolver
         PhysicsState finalStateA = impactStateA;
         PhysicsState finalStateB = impactStateB;
 
-        bool bothObjectsAreDynamic = info.objectA.Mass > 0f && info.objectB.Mass > 0f;
-
-        if (!bothObjectsAreDynamic)
+        bool isCarAgainstCar = info.objectA is Car && info.objectB is Car;
+        if (!isCarAgainstCar)
         {
             AdvanceRemainingTime(ref finalStateA, collisionTime);
             AdvanceRemainingTime(ref finalStateB, collisionTime);
@@ -55,6 +67,21 @@ public class CollisionResolver
 
         CommitFinalState(info.objectA, finalStateA);
         CommitFinalState(info.objectB, finalStateB);
+    }
+
+    private static void OrientContactNormal(CollisionInfo info, PhysicsState stateA, PhysicsState stateB)
+    {
+        Vector3 normal = info.contactNormal.normalized;
+        Vector3 relativeVelocity = stateB.LinearVelocity - stateA.LinearVelocity;
+
+        /*
+         * Para un impacto encontrado durante el paso,
+         * la velocidad relativa debe entrar en la normal.
+         */
+        if (info.collisionTime > 0.0001f && Vector3.Dot(relativeVelocity, normal) > 0f)
+            normal = -normal;
+
+        info.contactNormal = normal;
     }
 
     private float FindCollisionTime(CollisionInfo info, int iterations)
@@ -102,7 +129,7 @@ public class CollisionResolver
 
     private void ResolveImpulse(CollisionInfo info, ref PhysicsState stateA, ref PhysicsState stateB)
     {
-        Vector3 normal = info.contactNormal.normalized;
+        Vector3 normal = info.contactNormal;
 
         float inverseMassA = info.objectA.Mass > 0f ? 1f / info.objectA.Mass : 0f;
         float inverseMassB = info.objectB.Mass > 0f ? 1f / info.objectB.Mass : 0f;
@@ -176,7 +203,9 @@ public class CollisionResolver
 
     private void ApplyContactSeparation(CollisionInfo info, ref PhysicsState stateA, ref PhysicsState stateB)
     {
-        const float CONTACT_SKIN = 0.005f;
+        const float PENETRATION_SLOP = 0.001f;
+        const float CONTACT_SKIN = 0.003f;
+        const float MAX_INITIAL_CORRECTION = 0.08f;
 
         float inverseMassA = info.objectA.Mass > 0f ? 1f / info.objectA.Mass : 0f;
         float inverseMassB = info.objectB.Mass > 0f ? 1f / info.objectB.Mass : 0f;
@@ -185,7 +214,30 @@ public class CollisionResolver
         if (inverseMassSum <= Mathf.Epsilon)
             return;
 
-        float correctionDistance = Mathf.Max(info.penetration, 0f) + CONTACT_SKIN;
+        float correctionDistance;
+
+        if (info.collisionTime > 0.0001f)
+        {
+            /*
+             * Se encontró un tiempo de impacto.
+             * Ya retrocedimos hasta ese punto.
+             */
+            correctionDistance = CONTACT_SKIN;
+        }
+        else
+        {
+            /*
+             * Los objetos ya estaban penetrados al
+             * comenzar el paso. Se corrige de forma
+             * limitada para evitar saltos grandes.
+             */
+            float penetration = Mathf.Max(info.penetration - PENETRATION_SLOP, 0f);
+            correctionDistance = Mathf.Min(penetration, MAX_INITIAL_CORRECTION);
+        }
+
+        if (correctionDistance <= 0f)
+            return;
+
         Vector3 correction = info.contactNormal.normalized * correctionDistance / inverseMassSum;
 
         stateA.Position -= correction * inverseMassA;

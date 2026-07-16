@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using System.Threading.Tasks;
 
 public class Car : BaseCollisionObject, IDynamicCollisionBody
 {
@@ -273,7 +272,7 @@ public class Car : BaseCollisionObject, IDynamicCollisionBody
     {
         Matrix4x4 matrix = CollisionLocalToWorldMatrix;
 
-        Parallel.For(0, triangleReferences.Length, i =>
+        for (int i = 0; i < triangleReferences.Length; i++)
         {
             TriangleReference reference = triangleReferences[i];
             Triangle triangle = reference.triangle;
@@ -284,11 +283,11 @@ public class Car : BaseCollisionObject, IDynamicCollisionBody
 
             Vector3 sphereCenter = (p1 + p2 + p3) / 3f;
             float radiusSquared = Mathf.Max((p1 - sphereCenter).sqrMagnitude, Mathf.Max((p2 - sphereCenter).sqrMagnitude, (p3 - sphereCenter).sqrMagnitude));
-
             Sphere newCurrentSphere = new Sphere(sphereCenter, Mathf.Sqrt(radiusSquared));
 
             Vector3 minimum = Vector3.Min(p1, Vector3.Min(p2, p3));
             Vector3 maximum = Vector3.Max(p1, Vector3.Max(p2, p3));
+
             AABB newCurrentBounds = new AABB((minimum + maximum) * 0.5f, maximum - minimum);
 
             bool hasPreviousState = reference.lastUpdatedStep >= 0 && reference.currentBounds != null;
@@ -307,7 +306,7 @@ public class Car : BaseCollisionObject, IDynamicCollisionBody
             reference.currentBounds = newCurrentBounds;
             reference.currentSphere = newCurrentSphere;
             reference.lastUpdatedStep = collisionStep;
-        });
+        }
     }
 
     public void SetGroundSupport(ScenarioPiece piece, Vector3 normal)

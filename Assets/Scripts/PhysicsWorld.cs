@@ -27,10 +27,14 @@ public class PhysicsWorld : MonoBehaviour
     [Header("Collision detection")]
     [SerializeField] private int maxPreciseCandidatesPerPair = 12;
     [SerializeField] private int maxContactsPerPair = 1;
-    [SerializeField] private int binarySearchLimit = 6;
 
     [Header("Continuous collision")]
-    [SerializeField] private int temporalSearchSteps = 16;
+    [SerializeField] private int carTemporalSearchSteps = 10;
+    [SerializeField] private int ballTemporalSearchSteps = 32;
+    [SerializeField] private int binarySearchLimit = 6;
+
+    [Header("Debug")]
+    [SerializeField] private float timeScale = 1f;
 
     private readonly List<IDynamicCollisionBody> dynamicBodies = new();
 
@@ -51,6 +55,12 @@ public class PhysicsWorld : MonoBehaviour
 
     private int collisionStep;
 
+
+    private void OnValidate()
+    {
+        Time.timeScale = timeScale;
+    }
+
     private void Awake()
     {
         staticOctree = new TriangleOctree(transform.position, parentSize, staticMinNodeSize, staticMaxDepth, staticTrianglesPerNode);
@@ -66,7 +76,7 @@ public class PhysicsWorld : MonoBehaviour
 
         groundSupportSolver = new GroundSupportSolver(staticOctree);
 
-        collisionDetector = new CollisionDetector(staticOctree, dynamicOctree, maxPreciseCandidatesPerPair, maxContactsPerPair, temporalSearchSteps, binarySearchLimit);
+        collisionDetector = new CollisionDetector(staticOctree, dynamicOctree, maxContactsPerPair, carTemporalSearchSteps, ballTemporalSearchSteps, binarySearchLimit);
         collisionResolver = new CollisionResolver();
     }
 

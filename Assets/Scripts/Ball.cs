@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine;
 
 public class Ball : BaseCollisionObject, IDynamicCollisionBody
@@ -53,6 +52,10 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
         PreviousState = CurrentState;
 
         UpdateTriangleReferencesParallel(0);
+
+        Debug.Log(
+        $"{name} collision mesh: " +
+        $"{triangles.Count} triángulos");
     }
 
     public void SimulatePhysicsStep()
@@ -90,7 +93,7 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
     {
         Matrix4x4 matrix = CollisionLocalToWorldMatrix;
 
-        Parallel.For(0, triangleReferences.Length, i =>
+        for (int i = 0; i < triangleReferences.Length; i++)
         {
             TriangleReference reference = triangleReferences[i];
             Triangle triangle = reference.triangle;
@@ -101,11 +104,11 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
 
             Vector3 sphereCenter = (p1 + p2 + p3) / 3f;
             float radiusSquared = Mathf.Max((p1 - sphereCenter).sqrMagnitude, Mathf.Max((p2 - sphereCenter).sqrMagnitude, (p3 - sphereCenter).sqrMagnitude));
-
             Sphere newCurrentSphere = new Sphere(sphereCenter, Mathf.Sqrt(radiusSquared));
 
             Vector3 minimum = Vector3.Min(p1, Vector3.Min(p2, p3));
             Vector3 maximum = Vector3.Max(p1, Vector3.Max(p2, p3));
+
             AABB newCurrentBounds = new AABB((minimum + maximum) * 0.5f, maximum - minimum);
 
             bool hasPreviousState = reference.lastUpdatedStep >= 0 && reference.currentBounds != null;
@@ -124,7 +127,7 @@ public class Ball : BaseCollisionObject, IDynamicCollisionBody
             reference.currentBounds = newCurrentBounds;
             reference.currentSphere = newCurrentSphere;
             reference.lastUpdatedStep = collisionStep;
-        });
+        }
     }
 
     public override TriangleReference GetTriangleReference(int triangleIndex, int collisionStep)

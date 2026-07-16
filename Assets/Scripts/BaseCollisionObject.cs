@@ -59,37 +59,41 @@ public abstract class BaseCollisionObject : MonoBehaviour
 
     public AABB GetBoundsAtState(PhysicsState state)
     {
-        Vector3 min = LocalBounds.Min;
-        Vector3 max = LocalBounds.Max;
+        Vector3 minimum = LocalBounds.Min;
+        Vector3 maximum = LocalBounds.Max;
 
         Vector3[] corners =
         {
-        new Vector3(min.x, min.y, min.z),
-        new Vector3(max.x, min.y, min.z),
-        new Vector3(min.x, max.y, min.z),
-        new Vector3(max.x, max.y, min.z),
+        new Vector3(minimum.x, minimum.y, minimum.z),
+        new Vector3(maximum.x, minimum.y, minimum.z),
+        new Vector3(minimum.x, maximum.y, minimum.z),
+        new Vector3(maximum.x, maximum.y, minimum.z),
 
-        new Vector3(min.x, min.y, max.z),
-        new Vector3(max.x, min.y, max.z),
-        new Vector3(min.x, max.y, max.z),
-        new Vector3(max.x, max.y, max.z)
+        new Vector3(minimum.x, minimum.y, maximum.z),
+        new Vector3(maximum.x, minimum.y, maximum.z),
+        new Vector3(minimum.x, maximum.y, maximum.z),
+        new Vector3(maximum.x, maximum.y, maximum.z)
         };
 
-        Vector3 scale = transform.lossyScale;
+        Matrix4x4 collisionToRootMatrix = transform.worldToLocalMatrix * CollisionMeshTransform.localToWorldMatrix;
 
-        Vector3 worldMin = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
-        Vector3 worldMax = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+        Vector3 rootScale = transform.lossyScale;
 
-        foreach (Vector3 corner in corners)
+
+        Vector3 worldMinimum = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+        Vector3 worldMaximum = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+
+        for (int i = 0; i < corners.Length; i++)
         {
-            Vector3 scaledCorner = Vector3.Scale(corner, scale);
+            Vector3 rootLocalCorner = collisionToRootMatrix.MultiplyPoint3x4(corners[i]);
+            Vector3 scaledCorner = Vector3.Scale(rootLocalCorner, rootScale);
             Vector3 worldCorner = state.Position + state.Rotation * scaledCorner;
 
-            worldMin = Vector3.Min(worldMin, worldCorner);
-            worldMax = Vector3.Max(worldMax, worldCorner);
+            worldMinimum = Vector3.Min(worldMinimum, worldCorner);
+            worldMaximum = Vector3.Max(worldMaximum, worldCorner);
         }
 
-        return new AABB((worldMin + worldMax) * 0.5f, worldMax - worldMin);
+        return new AABB((worldMinimum + worldMaximum) * 0.5f, worldMaximum - worldMinimum);
     }
 
     public AABB GetSweptBounds(float margin = 0.05f)
