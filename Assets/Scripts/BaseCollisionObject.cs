@@ -13,6 +13,8 @@ public abstract class BaseCollisionObject : MonoBehaviour
 
     public abstract CollisionVolume CollisionVolume { get; }
 
+    public abstract AABB LocalBounds { get; }
+
     public abstract List<Triangle> Triangles { get; }
 
     public abstract Sphere GetTriangleSphere(Triangle triangle);
@@ -20,6 +22,30 @@ public abstract class BaseCollisionObject : MonoBehaviour
     public abstract Vector3 CenterOfMass { get; }
 
     public abstract Vector3 ApplyInverseInertiaTensor(Vector3 worldVector);
+
+    public abstract Vector3 LocalCenterOfMass { get; }
+
+    public abstract Transform CollisionMeshTransform { get; }
+
+    public Matrix4x4 CollisionLocalToWorldMatrix
+    {
+        get
+        {
+            return CollisionMeshTransform.localToWorldMatrix;
+        }
+    }
+
+    public Vector3 CollisionPointToWorld(Vector3 localPoint)
+    {
+        return CollisionMeshTransform.TransformPoint(localPoint);
+    }
+
+    public Vector3 GetCenterOfMassAtState(PhysicsState state)
+    {
+        Vector3 scaledCenter = Vector3.Scale(LocalCenterOfMass, transform.lossyScale);
+
+        return state.Position + state.Rotation * scaledCenter;
+    }
 
     public void SaveState()
     {
@@ -43,6 +69,54 @@ public abstract class BaseCollisionObject : MonoBehaviour
         state.AngularVelocity = Vector3.Lerp(from.AngularVelocity, to.AngularVelocity, t);
 
         return state;
+    }
+
+    public AABB GetBoundsAtState(PhysicsState state)
+    {
+        Vector3 min = LocalBounds.Min;
+        Vector3 max = LocalBounds.Max;
+
+        Vector3[] corners =
+        {
+        new Vector3(min.x, min.y, min.z),
+        new Vector3(max.x, min.y, min.z),
+        new Vector3(min.x, max.y, min.z),
+        new Vector3(max.x, max.y, min.z),
+
+        new Vector3(min.x, min.y, max.z),
+        new Vector3(max.x, min.y, max.z),
+        new Vector3(min.x, max.y, max.z),
+        new Vector3(max.x, max.y, max.z)
+        };
+
+        Vector3 scale = transform.lossyScale;
+
+        Vector3 worldMin = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+        Vector3 worldMax = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+
+        foreach (Vector3 corner in corners)
+        {
+            Vector3 scaledCorner = Vector3.Scale(corner, scale);
+            Vector3 worldCorner = state.Position + state.Rotation * scaledCorner;
+
+            worldMin = Vector3.Min(worldMin, worldCorner);
+            worldMax = Vector3.Max(worldMax, worldCorner);
+        }
+
+        return new AABB((worldMin + worldMax) * 0.5f, worldMax - worldMin);
+    }
+
+    public AABB GetSweptBounds(float margin = 0.05f)
+    {
+        AABB previousBounds = GetBoundsAtState(PreviousState);
+        AABB currentBounds = GetBoundsAtState(CurrentState);
+
+        Vector3 marginVector = Vector3.one * margin;
+
+        Vector3 min = Vector3.Min(previousBounds.Min, currentBounds.Min) - marginVector;
+        Vector3 max = Vector3.Max(previousBounds.Max, currentBounds.Max) + marginVector;
+
+        return new AABB((min + max) * 0.5f, max - min);
     }
 
     public void ApplyTemporaryState(PhysicsState state)

@@ -200,9 +200,9 @@ public static class Collisions
         edgeVertex2 = Vector3.zero;
 
         //Triangulo del plano (en mundo)
-        Vector3 p1 = planeTriangle.owner.transform.TransformPoint(planeTriangle.triangle.v1);
-        Vector3 p2 = planeTriangle.owner.transform.TransformPoint(planeTriangle.triangle.v2);
-        Vector3 p3 = planeTriangle.owner.transform.TransformPoint(planeTriangle.triangle.v3);
+        Vector3 p1 = planeTriangle.owner.CollisionPointToWorld(planeTriangle.triangle.v1);
+        Vector3 p2 = planeTriangle.owner.CollisionPointToWorld(planeTriangle.triangle.v2);
+        Vector3 p3 = planeTriangle.owner.CollisionPointToWorld(planeTriangle.triangle.v3);
 
         //Normal del plano
         Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
@@ -210,9 +210,9 @@ public static class Collisions
         //Vertices del otro triangulo (en mundo)
         Vector3[] vertices =
         {
-        testTriangle.owner.transform.TransformPoint(testTriangle.triangle.v1),
-        testTriangle.owner.transform.TransformPoint(testTriangle.triangle.v2),
-        testTriangle.owner.transform.TransformPoint(testTriangle.triangle.v3)
+        testTriangle.owner.CollisionPointToWorld(testTriangle.triangle.v1),
+        testTriangle.owner.CollisionPointToWorld(testTriangle.triangle.v2),
+        testTriangle.owner.CollisionPointToWorld(testTriangle.triangle.v3)
         };
 
         float[] distances = new float[3];
@@ -290,9 +290,9 @@ public static class Collisions
         hitPoint = Vector3.zero;
         const float EPSILON = 0.00001f;
 
-        Vector3 v0 = triangle.owner.transform.TransformPoint(triangle.triangle.v1);
-        Vector3 v1 = triangle.owner.transform.TransformPoint(triangle.triangle.v2);
-        Vector3 v2 = triangle.owner.transform.TransformPoint(triangle.triangle.v3);
+        Vector3 v0 = triangle.owner.CollisionPointToWorld(triangle.triangle.v1);
+        Vector3 v1 = triangle.owner.CollisionPointToWorld(triangle.triangle.v2);
+        Vector3 v2 = triangle.owner.CollisionPointToWorld(triangle.triangle.v3);
 
         Vector3 edge1 = v1 - v0;
         Vector3 edge2 = v2 - v0;
@@ -354,5 +354,62 @@ public static class Collisions
             return SphereVsAABB(ss.Sphere, ba.Bounds);
 
         return false;
+    }
+
+    public static Sphere GetMinimumTriangleSphere(Vector3 a, Vector3 b, Vector3 c)
+    {
+        float abSquared = (b - a).sqrMagnitude;
+        float acSquared = (c - a).sqrMagnitude;
+        float bcSquared = (c - b).sqrMagnitude;
+
+        Vector3 edgeA;
+        Vector3 edgeB;
+        Vector3 thirdPoint;
+
+        if (abSquared >= acSquared && abSquared >= bcSquared)
+        {
+            edgeA = a;
+            edgeB = b;
+            thirdPoint = c;
+        }
+        else if (acSquared >= abSquared && acSquared >= bcSquared)
+        {
+            edgeA = a;
+            edgeB = c;
+            thirdPoint = b;
+        }
+        else
+        {
+            edgeA = b;
+            edgeB = c;
+            thirdPoint = a;
+        }
+
+        Vector3 diameterCenter = (edgeA + edgeB) * 0.5f;
+        float diameterRadius = Vector3.Distance(edgeA, edgeB) * 0.5f;
+
+        if ((thirdPoint - diameterCenter).sqrMagnitude <= diameterRadius * diameterRadius + 0.000001f)
+            return new Sphere(diameterCenter, diameterRadius);
+
+        Vector3 ab = b - a;
+        Vector3 ac = c - a;
+        Vector3 normal = Vector3.Cross(ab, ac);
+
+        float normalSquared = normal.sqrMagnitude;
+
+        if (normalSquared <= 0.0000001f)
+            return new Sphere(diameterCenter, diameterRadius);
+
+        Vector3 circumcenter =
+            a +
+            (
+                Vector3.Cross(ac, normal) * ab.sqrMagnitude +
+                Vector3.Cross(normal, ab) * ac.sqrMagnitude
+            ) /
+            (2f * normalSquared);
+
+        float circumradius = Vector3.Distance(circumcenter, a);
+
+        return new Sphere(circumcenter, circumradius);
     }
 }

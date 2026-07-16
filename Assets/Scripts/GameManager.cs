@@ -7,6 +7,7 @@ public class GameManager : MonoBehaviour
     [Header("Objects")]
     [SerializeField] private Car car1;
     [SerializeField] private Car car2;
+    [SerializeField] private List<ScenarioPiece> scenarioPieces;
 
     [Header("Octree")]
     [SerializeField] private float parentSize;
@@ -20,6 +21,20 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int maxOctreeDepth = 10;
     [SerializeField] private int binarySearchLimit = 12;
 
+    [Header("Static Octree")]
+    [SerializeField] private float staticMinNodeSize = 4f;
+    [SerializeField] private int staticMaxDepth = 6;
+    [SerializeField] private int staticTrianglesPerNode = 64;
+
+    [Header("Dynamic Octree")]
+    [SerializeField] private float dynamicMinNodeSize = 4f;
+    [SerializeField] private int dynamicMaxDepth = 5;
+    [SerializeField] private int dynamicTrianglesPerNode = 256;
+
+    private TriangleOctree staticOctree;
+    private TriangleOctree dynamicOctree;
+    private readonly List<TriangleReference> dynamicTriangles = new();
+
     private List<OctreeNode> octreeNodes = new List<OctreeNode>();
     private readonly List<CollisionInfo> collisions = new List<CollisionInfo>();
 
@@ -32,6 +47,9 @@ public class GameManager : MonoBehaviour
     private long collectTrianglesTicks;
     private long sphereCandidatesTicks;
     private int collisionStep;
+    private int scenarioContactCount;
+    private long preciseCollisionTicks;
+    private long preciseCollisionTestCount;
 
     private double TicksToMilliseconds(long ticks)
     {
@@ -41,13 +59,34 @@ public class GameManager : MonoBehaviour
     //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     private readonly HashSet<TrianglePairKey> testedTrianglePairs = new();
+    private readonly Dictionary<ObjectPairKey, int> contactsPerPair = new();
+    [SerializeField] private int maxContactsPerPair = 1;
 
     private void Awake()
     {
         parentNode = new OctreeNode(transform.position, parentSize, null);
         objects.Add(car1);
         objects.Add(car2);
+
+        foreach (ScenarioPiece piece in scenarioPieces)
+            if (piece != null)
+                objects.Add(piece);
+
         parentNode.SetPosition(transform.position);
+
+        staticOctree = new TriangleOctree(transform.position, parentSize, staticMinNodeSize, staticMaxDepth, staticTrianglesPerNode);
+        dynamicOctree = new TriangleOctree(transform.position, parentSize, dynamicMinNodeSize, dynamicMaxDepth, dynamicTrianglesPerNode);
+    }
+
+    private void Start()
+    {
+        BuildStaticOctree();
+        Debug.Log(
+        $"ROOT | Min: {staticOctree.Root.Bounds.Min} | " +
+        $"Max: {staticOctree.Root.Bounds.Max}");
+
+        int dynamicTriangleCount = car1.Triangles.Count + car2.Triangles.Count;
+        dynamicTriangles.Capacity = dynamicTriangleCount;
     }
 
     private void Update()
@@ -111,44 +150,151 @@ public class GameManager : MonoBehaviour
 
         collisionStep++;
 
-        collisions.Clear();
-        testedTrianglePairs.Clear();
+        RebuildDynamicOctree(out double sphereUpdateMilliseconds, out double octreeBuildMilliseconds);
 
-        sphereTestCount = 0;
-        sphereHitCount = 0;
-        spherePairAttemptCount = 0;
-        duplicatePairCount = 0;
-        countTrianglesTicks = 0;
-        collectTrianglesTicks = 0;
-        sphereCandidatesTicks = 0;
+        Debug.Log(
+        $"Octree dinámico | " +
+        $"Triángulos: {dynamicTriangles.Count} | " +
+        $"Referencias totales: {dynamicOctree.StoredReferenceCount} | " +
+        $"Referencias en root: {dynamicOctree.RootReferenceCount} | " +
+        $"Nodos: {dynamicOctree.NodeCount} | " +
+        $"Actualizar: {sphereUpdateMilliseconds:F2} ms | " +
+        $"Construir: {octreeBuildMilliseconds:F2} ms | " +
+        $"Fuera: {dynamicOctree.RejectedOutsideRoot} | " +
+        $"Inválidos: {dynamicOctree.RejectedInvalidBounds}");
 
-        parentNode.Clear();
-        octreeNodes.Clear();
+        //car1.SimulatePhysicsStep();
+        //car2.SimulatePhysicsStep();
+        //
+        //car1.BeginContactDetection();
+        //car2.BeginContactDetection();
+        //
+        //collisionStep++;
+        //
+        //collisions.Clear();
+        //testedTrianglePairs.Clear();
+        //contactsPerPair.Clear();
+        //
+        //sphereTestCount = 0;
+        //sphereHitCount = 0;
+        //spherePairAttemptCount = 0;
+        //duplicatePairCount = 0;
+        //countTrianglesTicks = 0;
+        //collectTrianglesTicks = 0;
+        //sphereCandidatesTicks = 0;
+        //scenarioContactCount = 0;
+        //preciseCollisionTicks = 0;
+        //preciseCollisionTestCount = 0;
+        //
+        //parentNode.Clear();
+        //octreeNodes.Clear();
+        //
+        //var stopwatch =
+        //    System.Diagnostics.Stopwatch.StartNew();
+        //UpdateOctree(parentNode);
+        //stopwatch.Stop();
+        //
+        ////if (Time.frameCount % 60 == 0)
+        //{
+        //    Debug.Log(
+        //    $"Total: {stopwatch.Elapsed.TotalMilliseconds:F2} ms | " +
+        //    $"Conteo BVH: {TicksToMilliseconds(countTrianglesTicks):F2} ms | " +
+        //    $"Recolectar: {TicksToMilliseconds(collectTrianglesTicks):F2} ms | " +
+        //    $"Esferas: {TicksToMilliseconds(sphereCandidatesTicks):F2} ms | " +
+        //    $"Nodos: {octreeNodes.Count} | " +
+        //    $"Tests: {sphereTestCount} | " +
+        //    $"Hits: {sphereHitCount} | " +
+        //    $"Contactos escenario: {scenarioContactCount}" +
+        //    $"Precisas: {preciseCollisionTestCount} | " +
+        //    $"Tiempo preciso: {TicksToMilliseconds(preciseCollisionTicks):F2} ms | ");
+        //}
+        //
+        //foreach (CollisionInfo collision in collisions)
+        //    ResolveCollision(collision);
+        //
+        //collisions.Clear();
+        //ClearNodeTriangles();
+    }
 
-        var stopwatch =
-            System.Diagnostics.Stopwatch.StartNew();
-        UpdateOctree(parentNode);
-        stopwatch.Stop();
+    private void BuildStaticOctree()
+    {
+        List<TriangleReference> staticTriangles = new List<TriangleReference>();
 
-        if (Time.frameCount % 60 == 0)
+        foreach (ScenarioPiece piece in scenarioPieces)
         {
-            Debug.Log(
-            $"Total: {stopwatch.Elapsed.TotalMilliseconds:F2} ms | " +
-            $"Conteo BVH: {TicksToMilliseconds(countTrianglesTicks):F2} ms | " +
-            $"Recolectar: {TicksToMilliseconds(collectTrianglesTicks):F2} ms | " +
-            $"Esferas: {TicksToMilliseconds(sphereCandidatesTicks):F2} ms | " +
-            $"Nodos: {octreeNodes.Count} | " +
-            $"Tests: {sphereTestCount} | " +
-            $"Hits: {sphereHitCount} | " +
-            $"Hits únicos: {testedTrianglePairs.Count} | " +
-            $"Hits duplicados: {duplicatePairCount}");
+            if (piece == null)
+                continue;
+
+            for (int i = 0; i < piece.Triangles.Count; i++)
+            {
+                TriangleReference reference = piece.GetTriangleReference(i, 0);
+                staticTriangles.Add(reference);
+            }
         }
 
-        foreach (CollisionInfo collision in collisions)
-            ResolveCollision(collision);
+        System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        staticOctree.Build(staticTriangles);
 
-        collisions.Clear();
-        ClearNodeTriangles();
+        stopwatch.Stop();
+
+        Debug.Log(
+            $"Octree estático construido | " +
+            $"Triángulos originales: " +
+            $"{staticTriangles.Count} | " +
+            $"Referencias almacenadas: " +
+            $"{staticOctree.StoredReferenceCount} | " +
+            $"Nodos: {staticOctree.NodeCount} | " +
+            $"Tiempo: " +
+            $"{stopwatch.Elapsed.TotalMilliseconds:F2} ms");
+    }
+
+    private void AddDynamicObjectTriangles(BaseCollisionObject collisionObject)
+    {
+        for (int i = 0; i < collisionObject.Triangles.Count; i++)
+        {
+            TriangleReference reference = collisionObject.GetTriangleReference(i, collisionStep);
+            dynamicTriangles.Add(reference);
+        }
+    }
+
+    private void RebuildDynamicOctree(out double sphereUpdateMilliseconds, out double octreeBuildMilliseconds)
+    {
+        Matrix4x4 car1Matrix = car1.CollisionLocalToWorldMatrix;
+        Matrix4x4 car2Matrix = car2.CollisionLocalToWorldMatrix;
+
+        System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        car1.UpdateTriangleReferencesParallel(car1Matrix, collisionStep);
+        car2.UpdateTriangleReferencesParallel(car2Matrix, collisionStep);
+
+        stopwatch.Stop();
+        sphereUpdateMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+
+        if (collisionStep == 1)
+        {
+            TriangleReference car1Reference =                car1.TriangleReferences[0];
+            TriangleReference car2Reference =                car2.TriangleReferences[0];
+
+            Debug.Log(
+                $"{car1.name} primer triángulo | " +
+                $"Min: {car1Reference.bounds.Min} | " +
+                $"Max: {car1Reference.bounds.Max}");
+
+            Debug.Log(
+                $"{car2.name} primer triángulo | " +
+                $"Min: {car2Reference.bounds.Min} | " +
+                $"Max: {car2Reference.bounds.Max}");
+        }
+
+        dynamicTriangles.Clear();
+        dynamicTriangles.AddRange(car1.TriangleReferences);
+        dynamicTriangles.AddRange(car2.TriangleReferences);
+
+        stopwatch.Restart();
+        dynamicOctree.Refill(dynamicTriangles);
+        stopwatch.Stop();
+
+        octreeBuildMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
     }
 
     private void ResolveCollision(CollisionInfo info)
@@ -170,13 +316,14 @@ public class GameManager : MonoBehaviour
             PhysicsState safeStateA = info.objectA.GetInterpolatedState(info.previousStateA, info.currentStateA, safeTime);
             PhysicsState safeStateB = info.objectB.GetInterpolatedState(info.previousStateB, info.currentStateB, safeTime);
 
-            info.objectA.SetSimulationStates(safeStateA, safeStateA);
-            info.objectB.SetSimulationStates(safeStateB, safeStateB);
+            CommitFinalState(info.objectA, safeStateA);
+            CommitFinalState(info.objectB, safeStateB);
 
             return;
         }
 
         CalculateContactData(info);
+        RegisterGroundContact(info);
 
         ResolveImpulse(info, ref impactStateA, ref impactStateB);
 
@@ -188,8 +335,8 @@ public class GameManager : MonoBehaviour
         AdvanceRemainingTime(ref finalStateA, collisionTime);
         AdvanceRemainingTime(ref finalStateB, collisionTime);
 
-        info.objectA.SetSimulationStates(finalStateA, finalStateA);
-        info.objectB.SetSimulationStates(finalStateB, finalStateB);
+        CommitFinalState(info.objectA, finalStateA);
+        CommitFinalState(info.objectB, finalStateB);
     }
 
     private void ApplyContactSeparation(CollisionInfo info, ref PhysicsState stateA, ref PhysicsState stateB)
@@ -249,6 +396,10 @@ public class GameManager : MonoBehaviour
             return;
 
         float restitution = Mathf.Min(info.objectA.Restitution, info.objectB.Restitution);
+        const float RESTING_VELOCITY_THRESHOLD = 1f;
+        if (Mathf.Abs(velocityAlongNormal) < RESTING_VELOCITY_THRESHOLD)
+            restitution = 0f;
+
         float impulseMagnitude = -(1f + restitution) * velocityAlongNormal / denominator;
         Vector3 impulse = impulseMagnitude * normal;
 
@@ -301,7 +452,6 @@ public class GameManager : MonoBehaviour
         info.objectA.ApplyTemporaryState(currentStateA);
         info.objectB.ApplyTemporaryState(currentStateB);
 
-        // Proteccion: este par ya no colisiona en el estado final.
         if (!CheckCollision(info))
             return 1f;
 
@@ -329,13 +479,21 @@ public class GameManager : MonoBehaviour
 
     private bool CheckCollision(CollisionInfo info)
     {
+        bool objectAIsScenario = info.objectA is ScenarioPiece;
+
+        bool objectBIsScenario = info.objectB is ScenarioPiece;
+
+        // Escenario contra objeto dinámico: el triángulo del escenario siempre funciona como plano.
+        if (objectAIsScenario && !objectBIsScenario)
+            return CheckTriangleDirection(info.triangleA, info.triangleB, info);
+
+        if (objectBIsScenario && !objectAIsScenario)
+            return CheckTriangleDirection(info.triangleB, info.triangleA, info);
+
         if (CheckTriangleDirection(info.triangleA, info.triangleB, info))
             return true;
 
-        if (CheckTriangleDirection(info.triangleB, info.triangleA, info))
-            return true;
-
-        return false;
+        return CheckTriangleDirection(info.triangleB, info.triangleA, info);
     }
 
     private bool CheckTriangleDirection(TriangleReference planeTriangle, TriangleReference penetratingTriangle, CollisionInfo info)
@@ -378,9 +536,9 @@ public class GameManager : MonoBehaviour
     {
         TriangleReference plane = info.planeTriangle;
 
-        Vector3 p1 = plane.owner.transform.TransformPoint(plane.triangle.v1);
-        Vector3 p2 = plane.owner.transform.TransformPoint(plane.triangle.v2);
-        Vector3 p3 = plane.owner.transform.TransformPoint(plane.triangle.v3);
+        Vector3 p1 = plane.owner.CollisionPointToWorld(plane.triangle.v1);
+        Vector3 p2 = plane.owner.CollisionPointToWorld(plane.triangle.v2);
+        Vector3 p3 = plane.owner.CollisionPointToWorld(plane.triangle.v3);
 
         Vector3 normal = Vector3.Cross(p2 - p1, p3 - p1).normalized;
 
@@ -393,14 +551,31 @@ public class GameManager : MonoBehaviour
         info.penetration = Mathf.Abs(Vector3.Dot(info.penetratingVertex - info.contactPoint, normal));
     }
 
+    private void RegisterGroundContact(CollisionInfo info)
+    {
+        if (info.objectA is Car carA && info.objectB is ScenarioPiece)
+        {
+            Vector3 supportNormal = -info.contactNormal;
+            if (Vector3.Dot(supportNormal, carA.transform.up) > 0.25f)
+                carA.SetGroundContact(supportNormal);
+        }
+
+        if (info.objectB is Car carB && info.objectA is ScenarioPiece)
+        {
+            Vector3 supportNormal = info.contactNormal;
+
+            if (Vector3.Dot(supportNormal, carB.transform.up) > 0.25f)
+                carB.SetGroundContact(supportNormal);
+        }
+    }
+
     private void ClearNodeTriangles()
     {
         foreach (OctreeNode node in octreeNodes)
             node.triangles.Clear();
     }
 
-
-    private bool ProcessSphereCandidates(OctreeNode node)
+    private void ProcessSphereCandidates(OctreeNode node)
     {
         for (int i = 0; i < node.objects.Count; i++)
         {
@@ -413,13 +588,25 @@ public class GameManager : MonoBehaviour
             {
                 BaseCollisionObject ownerB = node.objects[j];
 
+                if (ownerA.Mass <= 0f && ownerB.Mass <= 0f)
+                    continue;
+
                 if (!node.triangles.TryGetValue(ownerB, out List<TriangleReference> listB))
+                    continue;
+
+                ObjectPairKey objectPair = new ObjectPairKey(ownerA, ownerB);
+                contactsPerPair.TryGetValue(objectPair, out int contactCount);
+
+                if (contactCount >= maxContactsPerPair)
                     continue;
 
                 foreach (TriangleReference triangleA in listA)
                 {
                     foreach (TriangleReference triangleB in listB)
                     {
+                        if (contactCount >= maxContactsPerPair)
+                            break;
+
                         spherePairAttemptCount++;
                         sphereTestCount++;
 
@@ -428,9 +615,9 @@ public class GameManager : MonoBehaviour
 
                         sphereHitCount++;
 
-                        TrianglePairKey key = new TrianglePairKey(triangleA, triangleB);
+                        TrianglePairKey trianglePair = new TrianglePairKey(triangleA, triangleB);
 
-                        if (!testedTrianglePairs.Add(key))
+                        if (!testedTrianglePairs.Add(trianglePair))
                         {
                             duplicatePairCount++;
                             continue;
@@ -438,45 +625,51 @@ public class GameManager : MonoBehaviour
 
                         CollisionInfo collision = BuildCollisionInfo(triangleA, triangleB);
 
-                        // Vertex-Plane y Ray-Triangle.
-                        if (!CheckCollision(collision))
+                        long preciseStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                        preciseCollisionTestCount++;
+
+                        bool collided = CheckCollision(collision);
+                        preciseCollisionTicks += System.Diagnostics.Stopwatch.GetTimestamp() - preciseStart;
+
+                        if (!collided)
                             continue;
 
                         collisions.Add(collision);
-                        return true;
+
+                        contactCount++;
+                        contactsPerPair[objectPair] = contactCount;
+
+                        if (ownerA is ScenarioPiece || ownerB is ScenarioPiece)
+                            scenarioContactCount++;
                     }
+
+                    if (contactCount >= maxContactsPerPair)
+                        break;
                 }
             }
         }
-
-        return false;
     }
 
-    private bool UpdateOctree(OctreeNode node)
+    private void UpdateOctree(OctreeNode node)
     {
         if (node == null)
-            return false;
+            return;
 
         octreeNodes.Add(node);
 
         node.objects.Clear();
         node.triangles.Clear();
 
-        // 1) Volúmenes de los objetos contra el nodo del octree.
         List<BaseCollisionObject> objectsToCheck = node.Parent == null ? objects : node.Parent.objects;
-
         Collisions.CheckObjectsOctreeNodes(objectsToCheck, node);
 
         if (node.objects.Count < minObjectsToDivide)
-            return false;
+            return;
 
-        // 2) Los volúmenes generales de los objetos se superponen.
         if (!Collisions.ObjectsCollideInsideNode(node))
-            return false;
+            return;
 
-        // 3) Contar triángulos mediante la BVH.
         bool canSubdivide = node.Size / 2f >= minSize && node.Depth < maxOctreeDepth;
-
         bool shouldSubdivide = false;
 
         if (canSubdivide)
@@ -491,42 +684,21 @@ public class GameManager : MonoBehaviour
             node.GenerateChildren();
 
             foreach (OctreeNode child in node.Children)
-            {
-                // Una rama encontró una colisión precisa.
-                // No hace falta revisar las demás.
-                if (UpdateOctree(child))
-                    return true;
-            }
+                UpdateOctree(child);
 
-            return false;
+            return;
         }
 
-        // 4) Recolectar solamente para hojas finales.
         long collectStart = System.Diagnostics.Stopwatch.GetTimestamp();
         Collisions.CollectTrianglesForLeaf(node, collisionStep);
         collectTrianglesTicks += System.Diagnostics.Stopwatch.GetTimestamp() - collectStart;
 
         if (node.triangles.Count < 2)
-            return false;
+            return;
 
-        // 5) Esferas y pruebas precisas.
         long sphereStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        bool collisionFound = ProcessSphereCandidates(node);
+        ProcessSphereCandidates(node);
         sphereCandidatesTicks += System.Diagnostics.Stopwatch.GetTimestamp() - sphereStart;
-        return collisionFound;
-
-        //if (candidates.Count == 0)
-        //    return;
-
-        //// 6) Vertex-Plane y Ray-Triangle.
-        //foreach (CollisionInfo collision in candidates)
-        //{
-        //    if (!CheckCollision(collision))
-        //        continue;
-        //
-        //    collisions.Add(collision);
-        //}
-
     }
 
     private CollisionInfo BuildCollisionInfo(TriangleReference triangleA, TriangleReference triangleB)
@@ -548,9 +720,26 @@ public class GameManager : MonoBehaviour
         return info;
     }
 
+    private void CommitFinalState(BaseCollisionObject obj, PhysicsState state)
+    {
+        if (obj.Mass <= 0f)
+            return;
+
+        obj.SetSimulationStates(state, state);
+    }
+
+    //private void OnDrawGizmos()
+    //{
+    //    if (parentNode != null)
+    //        parentNode.Draw();
+    //}
+
     private void OnDrawGizmos()
     {
-        //if (parentNode != null)
-        //    parentNode.Draw();
+        if (staticOctree == null)
+            return;
+
+        Gizmos.color = Color.green;
+        staticOctree.DrawGizmos();
     }
 }

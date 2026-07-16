@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using System.Threading.Tasks;
 
 public class Car : BaseCollisionObject
 {
@@ -20,7 +21,7 @@ public class Car : BaseCollisionObject
     [Header("Jump")]
     [SerializeField] private float jumpImpulse = 5f;
 
-    private const float GRAVITY = 9.8f;
+    private const float GRAVITY = 0;
 
     private Vector3 linearVelocity;
     private Vector3 angularVelocity;
@@ -30,16 +31,18 @@ public class Car : BaseCollisionObject
     private float rotationInput;
 
     private bool isGrounded = true;
+    private Vector3 groundNormal = Vector3.up;
 
     private List<Triangle> triangles = new List<Triangle>();
     private TriangleReference[] triangleReferences;
-
+    public TriangleReference[] TriangleReferences => triangleReferences;
     public override float Mass => mass;
     public override float Restitution => restitution;
-    public AABB Bounds => new AABB(transform.position, meshRenderer.bounds.extents * 2);
+    public AABB Bounds => new AABB(meshRenderer.bounds.center, meshRenderer.bounds.extents * 2);
 
     private BVHNode bvhRoot;
     public override BVHNode BVHRoot => bvhRoot;
+    public override Vector3 LocalCenterOfMass => meshFilter.sharedMesh.bounds.center;
 
     public float ForwardSpeed
     {
@@ -53,6 +56,14 @@ public class Car : BaseCollisionObject
         }
     }
 
+    public override Transform CollisionMeshTransform
+    {
+        get
+        {
+            return meshFilter.transform;
+        }
+    }
+
     public float VerticalSpeed
     {
         get => linearVelocity.y;
@@ -61,12 +72,25 @@ public class Car : BaseCollisionObject
 
     private AABBVolume collisionVolume;
 
+    public override AABB LocalBounds
+    {
+        get
+        {
+            Bounds meshBounds = meshFilter.sharedMesh.bounds;
+
+            return new AABB(meshBounds.center, meshBounds.size);
+        }
+    }
+
     public override CollisionVolume CollisionVolume
     {
         get
         {
-            collisionVolume ??= new AABBVolume(Bounds);
-            collisionVolume.Bounds = Bounds;
+            AABB sweptBounds = GetSweptBounds();
+
+            collisionVolume ??= new AABBVolume(sweptBounds);
+            collisionVolume.Bounds = sweptBounds;
+
             return collisionVolume;
         }
     }
@@ -145,9 +169,7 @@ public class Car : BaseCollisionObject
 
         ApplyLateralFriction(dt);
 
-        if (!isGrounded)
-            linearVelocity += Vector3.down * GRAVITY * dt;
-
+        linearVelocity += Vector3.down * GRAVITY * dt;
         transform.position += linearVelocity * dt;
 
         float updatedForwardSpeed = Vector3.Dot(linearVelocity, transform.forward);
@@ -281,6 +303,41 @@ public class Car : BaseCollisionObject
             inertiaZ > Mathf.Epsilon ? 1f / inertiaZ : 0f);
     }
 
+    public void UpdateTriangleReferencesParallel(Matrix4x4 localToWorldMatrix, int collisionStep)
+    {
+        Parallel.For(0, triangleReferences.Length, i =>
+            {
+                TriangleReference reference = triangleReferences[i];
+
+                Triangle triangle = reference.triangle;
+
+                Vector3 p1 = localToWorldMatrix.MultiplyPoint3x4(triangle.v1);
+                Vector3 p2 = localToWorldMatrix.MultiplyPoint3x4(triangle.v2);
+                Vector3 p3 = localToWorldMatrix.MultiplyPoint3x4(triangle.v3);
+                Vector3 sphereCenter = (p1 + p2 + p3) / 3f;
+
+                float radiusSquared = Mathf.Max((p1 - sphereCenter).sqrMagnitude, Mathf.Max((p2 - sphereCenter).sqrMagnitude, (p3 - sphereCenter).sqrMagnitude));
+                reference.sphere = new Sphere(sphereCenter, Mathf.Sqrt(radiusSquared));
+
+                Vector3 minimum = Vector3.Min(p1, Vector3.Min(p2, p3));
+                Vector3 maximum = Vector3.Max(p1, Vector3.Max(p2, p3));
+
+                reference.bounds = new AABB((minimum + maximum) * 0.5f, maximum - minimum);
+                reference.lastUpdatedStep = collisionStep;
+            });
+    }
+
+    public void BeginContactDetection()
+    {
+        isGrounded = false;
+    }
+
+    public void SetGroundContact(Vector3 normal)
+    {
+        isGrounded = true;
+        groundNormal = normal.normalized;
+    }
+
     public override Vector3 ApplyInverseInertiaTensor(Vector3 worldVector)
     {
         Vector3 localVector = transform.InverseTransformDirection(worldVector);
@@ -295,13 +352,12 @@ public class Car : BaseCollisionObject
 
     public override Sphere GetTriangleSphere(Triangle triangle)
     {
-        Vector3 worldCenter = transform.TransformPoint(triangle.localBoundingSphere.center);
+        Vector3 p1 = transform.TransformPoint(triangle.v1);
+        Vector3 p2 = transform.TransformPoint(triangle.v2);
+        Vector3 p3 = transform.TransformPoint(triangle.v3);
 
-        float scale = Mathf.Max(transform.lossyScale.x, Mathf.Max(transform.lossyScale.y, transform.lossyScale.z));
-
-        return new Sphere(worldCenter, triangle.localBoundingSphere.radius * scale);
+        return Collisions.GetMinimumTriangleSphere(p1, p2, p3);
     }
-
 
 
     protected override Vector3 GetLinearVelocity()
