@@ -45,14 +45,8 @@ public class CollisionResolver
             return;
         }
 
-        //OrientContactNormal(info, impactStateA, impactStateB);
-
-        ResolveImpulse(
-            info,
-            ref impactStateA,
-            ref impactStateB);
-
         ResolveImpulse(info, ref impactStateA, ref impactStateB);
+        //ResolveImpulse(info, ref impactStateA, ref impactStateB);
         ApplyContactSeparation(info, ref impactStateA, ref impactStateB);
 
         PhysicsState finalStateA = impactStateA;
@@ -125,8 +119,8 @@ public class CollisionResolver
             stateB.LinearVelocity += frictionImpulse * inverseMassB;
         }
 
-        StopSmallBallTangentialVelocity(info.objectA, ref stateA, normal);
-        StopSmallBallTangentialVelocity(info.objectB, ref stateB, normal);
+        //StopSmallBallTangentialVelocity(info.objectA, ref stateA, normal);
+        //StopSmallBallTangentialVelocity(info.objectB, ref stateB, normal);
     }
 
     private static void StopSmallBallTangentialVelocity(BaseCollisionObject collisionObject, ref PhysicsState state, Vector3 contactNormal)

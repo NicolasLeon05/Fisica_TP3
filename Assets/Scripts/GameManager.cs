@@ -1,6 +1,12 @@
 using System.Collections;
 using UnityEngine;
 
+//Resolver colisiones antes de calcular coeficiente de penetracion
+//Chequear si no resuelvo cuando mergeo AABB
+//Usar paralelismo con meshes con mas vertices
+//Tratar a todos los meshes dynamicos exactamente igual
+//Cambiar la forma de crear el octree (bits)
+
 public class GameManager : MonoBehaviour
 {
     [Header("Players")]
@@ -30,6 +36,13 @@ public class GameManager : MonoBehaviour
 
     public bool RoundLocked => roundLocked;
     public bool MatchFinished => matchFinished;
+
+
+    private void Update()
+    {
+        if (Input.GetKeyUp(KeyCode.R))
+            ResetRound();
+    }
 
     public void RegisterGoal(int scoringPlayer)
     {

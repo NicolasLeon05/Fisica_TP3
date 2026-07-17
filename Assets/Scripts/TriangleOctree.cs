@@ -118,10 +118,6 @@ public class TriangleOctree
                 InsertRecursive(containingChild, reference);
             else
                 node.Triangles.Add(reference);
-            /*
-             * No entra completamente en un hijo.
-             * Permanece almacenado en el padre.
-             */
         }
     }
 
@@ -276,22 +272,9 @@ public class TriangleOctree
         return count;
     }
 
-    private static bool IsFinite(Vector3 value)
-    {
-        return
-            !float.IsNaN(value.x) &&
-            !float.IsNaN(value.y) &&
-            !float.IsNaN(value.z) &&
-            !float.IsInfinity(value.x) &&
-            !float.IsInfinity(value.y) &&
-            !float.IsInfinity(value.z);
-    }
-
     private static bool IsValidAABB(AABB bounds)
     {
         return
-            IsFinite(bounds.Min) &&
-            IsFinite(bounds.Max) &&
             bounds.Min.x <= bounds.Max.x &&
             bounds.Min.y <= bounds.Max.y &&
             bounds.Min.z <= bounds.Max.z;

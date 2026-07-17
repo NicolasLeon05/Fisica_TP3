@@ -43,17 +43,4 @@ public readonly struct TrianglePairKey : IEquatable<TrianglePairKey>
     {
         return obj is TrianglePairKey other && Equals(other);
     }
-
-    public override int GetHashCode()
-    {
-        unchecked
-        {
-            int hash = 17;
-            hash = hash * 31 + ownerA;
-            hash = hash * 31 + ownerB;
-            hash = hash * 31 + triangleA;
-            hash = hash * 31 + triangleB;
-            return hash;
-        }
-    }
 }

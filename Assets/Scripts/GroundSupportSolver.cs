@@ -55,8 +55,7 @@ public class GroundSupportSolver
 
         for (int i = 0; i < supportQueryResults.Count; i++)
         {
-            TriangleReference triangle =
-                supportQueryResults[i];
+            TriangleReference triangle = supportQueryResults[i];
 
             if (!Collisions.RayVsTriangle(origin, direction, maximumDistance, triangle, out Vector3 currentHitPoint))
                 continue;

@@ -32,12 +32,4 @@ public readonly struct ObjectPairKey : IEquatable<ObjectPairKey>
     {
         return obj is ObjectPairKey other && Equals(other);
     }
-
-    public override int GetHashCode()
-    {
-        unchecked
-        {
-            return objectAId * 397 ^ objectBId;
-        }
-    }
 }

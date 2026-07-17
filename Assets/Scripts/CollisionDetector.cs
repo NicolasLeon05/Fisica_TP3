@@ -72,7 +72,7 @@ public class CollisionDetector
         results.Clear();
 
         foreach (CandidateBuffer buffer in candidateBuffers.Values)
-        { buffer.Clear(); }
+            buffer.Clear();
 
         for (int i = 0; i < dynamicObjects.Count; i++)
         {
@@ -92,10 +92,7 @@ public class CollisionDetector
 
         if (!Collisions.AABBIntersectsAABB(objectBoundsA, objectBoundsB))
             return;
-        /*
-         * Consultamos solamente la región espacial
-         * compartida por los dos autos.
-         */
+
         AABB intersectionBounds = GetIntersectionBounds(objectBoundsA, objectBoundsB);
 
         dynamicPairQueryResults.Clear();

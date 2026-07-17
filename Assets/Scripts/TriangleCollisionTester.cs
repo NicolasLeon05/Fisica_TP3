@@ -8,25 +8,25 @@ public static class TriangleCollisionTester
         bool objectBIsScenario = info.objectB is ScenarioPiece;
 
         // El escenario siempre es el plano.
-        if (objectAIsScenario && !objectBIsScenario)
-            return CheckTriangleDirection(info.triangleA, info.triangleB, info);
-
-        if (objectBIsScenario && !objectAIsScenario)
-            return CheckTriangleDirection(info.triangleB, info.triangleA, info);
-
-        /*
-         * Pelota contra objeto dinamico:
-         * el auto funciona como plano y el triangulo
-         * de la pelota como triangulo penetrante.
-         */
-        if (info.objectA is Ball && !(info.objectB is Ball))
-            return CheckTriangleDirection(info.triangleB, info.triangleA, info);
-
-        if (info.objectB is Ball && !(info.objectA is Ball))
-            return CheckTriangleDirection(info.triangleA, info.triangleB, info);
-
-        if (CheckTriangleDirection(info.triangleA, info.triangleB, info))
-            return true;
+        //if (objectAIsScenario && !objectBIsScenario)
+        //    return CheckTriangleDirection(info.triangleA, info.triangleB, info);
+        //
+        //if (objectBIsScenario && !objectAIsScenario)
+        //    return CheckTriangleDirection(info.triangleB, info.triangleA, info);
+        //
+        ///*
+        // * Pelota contra objeto dinamico:
+        // * el auto funciona como plano y el triangulo
+        // * de la pelota como triangulo penetrante.
+        // */
+        //if (info.objectA is Ball && !(info.objectB is Ball))
+        //    return CheckTriangleDirection(info.triangleB, info.triangleA, info);
+        //
+        //if (info.objectB is Ball && !(info.objectA is Ball))
+        //    return CheckTriangleDirection(info.triangleA, info.triangleB, info);
+        //
+        //if (CheckTriangleDirection(info.triangleA, info.triangleB, info))
+        //    return true;
 
         return CheckTriangleDirection(info.triangleB, info.triangleA, info);
     }
